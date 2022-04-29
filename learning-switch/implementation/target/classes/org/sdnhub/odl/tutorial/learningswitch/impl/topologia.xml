@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<types xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="/home/ubuntu/rti_connext_dds-5.2.3/bin/../resource/app/app_support/rtiddsgen/schema/rti_dds_topic_types.xsd">
+<const name="MAX_SIZE" type="long" value="64"/>
+<struct name= "topologia">
+  <member name="Identificador" stringMaxLength="MAX_SIZE" type="string"/>
+  <member name="NodeId" stringMaxLength="MAX_SIZE" type="string"/>
+  <member name="TerminationPointId" stringMaxLength="MAX_SIZE" type="string"/>
+  <member name="LinkId" stringMaxLength="MAX_SIZE" type="string"/>
+  <member name="SourceNode" stringMaxLength="MAX_SIZE" type="string"/>
+  <member name="SourceNodeTp" stringMaxLength="MAX_SIZE" type="string"/>
+  <member name="DestinationNode" stringMaxLength="MAX_SIZE" type="string"/>
+  <member name="DestinationNodeTp" stringMaxLength="MAX_SIZE" type="string"/>
+</struct>
+</types>
