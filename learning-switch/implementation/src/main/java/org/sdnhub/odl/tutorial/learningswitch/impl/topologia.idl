@@ -1,0 +1,17 @@
+/*Este archivo permite crear un formato para transmitir toda la informacion
+de la topologia de una red SDN, utilizando DDS*/
+
+const long MAX_SIZE=64;
+
+/*Identificadores de los distintos elementos de la topologia*/
+
+struct topologia{
+	string<MAX_SIZE> 		Identificador;
+	string<MAX_SIZE>		NodeId;
+	string<MAX_SIZE>		TerminationPointId;
+	string<MAX_SIZE>		LinkId;
+	string<MAX_SIZE>		SourceNode;
+	string<MAX_SIZE>		SourceNodeTp;
+	string<MAX_SIZE>		DestinationNode;
+	string<MAX_SIZE>		DestinationNodeTp;
+};
