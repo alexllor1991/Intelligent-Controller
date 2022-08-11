@@ -6,6 +6,7 @@ import ai.djl.training.tracker.Tracker;
 import ai.djl.util.RandomUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.Arrays;
 
 /**
  * {@link ai.djl.modality.rl.agent.EpsilonGreedy} is a simple exploration/excitation agent.
@@ -41,11 +42,44 @@ public class EpsilonGreedy implements RlAgent {
      * {@inheritDoc}
      */
     @Override
-    public NDList chooseAction(Environment env, boolean training) {
+    public NDList chooseAction(Environment env, boolean training, int nodes, int clusters) {
         if (training && RandomUtils.random() < exploreRate.getNewValue(counter++)) {
             logger.info("**********RANDOM ACTION************");
-            return env.getActionSpace().randomAction();
-        } else return baseAgent.chooseAction(env, training);
+            NDList action = env.getActionSpace().randomAction();
+            System.out.println(Arrays.toString(action.toArray()));
+
+            // if (!(action.singletonOrThrow().getInt(4) == 1)) {
+            //     return action;
+            // } else {
+            //     while (action.singletonOrThrow().getInt(4) == 1) {
+            //         action = env.getActionSpace().randomAction();
+            //         System.out.println(Arrays.toString(action.toArray()));
+            //     }
+            //     return action;
+            // }
+
+            // if (!(action.singletonOrThrow().getInt(4) == 1) || !(action.singletonOrThrow().getInt(8) == 1)) {
+            //     return action;
+            // } else {
+            //     while (action.singletonOrThrow().getInt(4) == 1 || action.singletonOrThrow().getInt(8) == 1) {
+            //         action = env.getActionSpace().randomAction();
+            //         System.out.println(Arrays.toString(action.toArray()));
+            //     }
+            //     return action;
+            // }
+
+            if (!(action.singletonOrThrow().getInt(4) == 1) || !(action.singletonOrThrow().getInt(8) == 1) || !(action.singletonOrThrow().getInt(12) == 1)) {
+                return action;
+            } else {
+                while (action.singletonOrThrow().getInt(4) == 1 || action.singletonOrThrow().getInt(8) == 1 || action.singletonOrThrow().getInt(12) == 1) {
+                    action = env.getActionSpace().randomAction();
+                    System.out.println(Arrays.toString(action.toArray()));
+                }
+                return action;
+            }
+
+            //return env.getActionSpace().randomAction();
+        } else return baseAgent.chooseAction(env, training, nodes, clusters);
     }
 
     /**

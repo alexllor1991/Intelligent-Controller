@@ -1,5 +1,7 @@
 package com.rlresallo.agents;
 
+import ai.djl.Device;
+import ai.djl.Model;
 import ai.djl.ndarray.NDArrays;
 import ai.djl.ndarray.NDManager;
 import com.rlresallo.ActionSpace;
@@ -10,11 +12,20 @@ import ai.djl.ndarray.NDList;
 import ai.djl.training.GradientCollector;
 import ai.djl.training.Trainer;
 import ai.djl.training.listener.TrainingListener.BatchData;
+import ai.djl.training.TrainingResult;
 import ai.djl.translate.Batchifier;
+import ai.djl.metric.Metrics;
+import ai.djl.nn.ParameterList;
+import ai.djl.nn.Parameter;
+import ai.djl.training.ParameterStore;
+import ai.djl.training.ParameterServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.List;
+import java.util.ArrayList;
+//import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * {@link RlAgent} implementing Q or Deep-Q Learning.
@@ -25,8 +36,10 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class QAgent implements RlAgent {
     
-    private final Trainer trainer;  //Trainer provides an easy, and manageable interface for training. The trainer for the model to learn. 
-    private final float rewardDiscount; //Value to apply to rewards from future states. 
+    private Trainer trainer;  //Trainer provides an easy, and manageable interface for training. The trainer for the model to learn. 
+    private float rewardDiscount; //Value to apply to rewards from future states. 
+    //private int epoch;
+    private ParameterStore parameterStore;
 
     /**
      * Constructs a {@link ai.djl.modality.rl.agent.QAgent} 
@@ -34,6 +47,7 @@ public class QAgent implements RlAgent {
     public QAgent(Trainer trainer, float rewardDiscount) {
         this.trainer = trainer;
         this.rewardDiscount = rewardDiscount;
+        //epoch = 0;
     }
 
     private static final Logger logger = LoggerFactory.getLogger(QAgent.class);
@@ -42,11 +56,56 @@ public class QAgent implements RlAgent {
      * {@inheritDoc}
      */
     @Override
-    public NDList chooseAction(Environment env, boolean training) {
+    public NDList chooseAction(Environment env, boolean training, int nodes, int clusters) {
+        int secondBestAction = 0;
+        boolean availableResourcesComp = false;
+        //int thirdBestAction = 0;
+        int indexes = clusters * nodes;
         ActionSpace actionSpace = env.getActionSpace();
-        NDArray actionReward = trainer.evaluate(env.getObservation()).singletonOrThrow().get(0); //Evaluates function of the model once on the given input and return the predict function.
+        NDArray actionReward = trainer.evaluate(env.getObservation()).singletonOrThrow(); //Evaluates function of the model once on the given input and return the predict function.
         logger.info(Arrays.toString(actionReward.toFloatArray()));
         int bestAction = Math.toIntExact(actionReward.argMax().getLong());
+        //System.out.println(bestAction);
+        //System.out.println(env.getObservation().singletonOrThrow().getFloat(1));
+        //System.out.println(env.getObservation().singletonOrThrow().getFloat(2));
+        //System.out.println(env.getObservation().singletonOrThrow().getFloat(3));
+        if (clusters == 1 && (env.getObservation().singletonOrThrow().getFloat(1) < 0.9f || env.getObservation().singletonOrThrow().getFloat(2) < 0.9f || env.getObservation().singletonOrThrow().getFloat(3) < 0.9f)) {
+            availableResourcesComp = true;
+        }
+        if (clusters == 2 && (env.getObservation().singletonOrThrow().getFloat(1) < 0.9f || env.getObservation().singletonOrThrow().getFloat(2) < 0.9f || env.getObservation().singletonOrThrow().getFloat(3) < 0.9f || env.getObservation().singletonOrThrow().getFloat(5) < 0.9f || env.getObservation().singletonOrThrow().getFloat(6) < 0.9f || env.getObservation().singletonOrThrow().getFloat(7) < 0.9f)) {
+            availableResourcesComp = true;
+        }
+        if (clusters == 3 && (env.getObservation().singletonOrThrow().getFloat(1) < 0.9f || env.getObservation().singletonOrThrow().getFloat(2) < 0.9f || env.getObservation().singletonOrThrow().getFloat(3) < 0.9f || env.getObservation().singletonOrThrow().getFloat(5) < 0.9f || env.getObservation().singletonOrThrow().getFloat(6) < 0.9f || env.getObservation().singletonOrThrow().getFloat(7) < 0.9f) || env.getObservation().singletonOrThrow().getFloat(9) < 0.9f || env.getObservation().singletonOrThrow().getFloat(10) < 0.9f || env.getObservation().singletonOrThrow().getFloat(11) < 0.9f) {
+            availableResourcesComp = true;
+        }
+        if (actionSpace.get(bestAction).singletonOrThrow().getInt(nodes) == 1 && availableResourcesComp == true) {
+            NDArray actionRewardIndexesSorted = actionReward.argSort();
+            //System.out.println(actionRewardIndexesSorted);
+            System.out.println(Arrays.toString(actionRewardIndexesSorted.toArray()));
+            //System.out.println(actionRewardIndexesSorted.toLongArray()[3]);
+            //System.out.println(actionRewardIndexesSorted.toLongArray()[2]);
+            if (clusters == 1) {
+                secondBestAction = Math.toIntExact(actionRewardIndexesSorted.toLongArray()[3]);
+                if (secondBestAction == 0) {
+                    secondBestAction = Math.toIntExact(actionRewardIndexesSorted.toLongArray()[2]);
+                }
+            }
+            if (clusters == 2) {
+                secondBestAction = actionRewardIndexesSorted.getInt(7);
+            }
+            if (clusters == 3) {
+                secondBestAction = actionRewardIndexesSorted.getInt(11);
+            }
+            if (secondBestAction % 4 == 0) {
+                if (clusters == 2) {
+                    secondBestAction = actionRewardIndexesSorted.getInt(6);
+                }
+                if (clusters == 3) {
+                    secondBestAction = actionRewardIndexesSorted.getInt(10);
+                } 
+            }
+            bestAction = secondBestAction;
+        }
         return actionSpace.get(bestAction);
     }
 
@@ -55,6 +114,8 @@ public class QAgent implements RlAgent {
      */
     @Override
     public void trainBatch(Step[] batchSteps) {
+        //epoch++;
+
         BatchData batchData = new BatchData(null, new ConcurrentHashMap<>(), new ConcurrentHashMap<>()); //Create a TrainingListener.BatchData.
 
         NDManager temporaryManager = NDManager.newBaseManager(); //Creates a temporary manager for attaching NDArray to reduce the Device(CPU/GPU) memory usage.
@@ -94,16 +155,24 @@ public class QAgent implements RlAgent {
             Arrays.stream(targetQValue).forEach(value -> targetQBatch.addAll(new NDList(value)));
             NDList targetQ = new NDList(NDArrays.stack(targetQBatch, 0));
 
+            long time = System.nanoTime();
             NDArray lossValue = trainer.getLoss().evaluate(targetQ, Q); //Gets the training loss function of the trainer
             collector.backward(lossValue); // Calculate the gradient
+            trainer.addMetric("backward", time);
+            time = System.nanoTime();
             batchData.getLabels().put(targetQ.singletonOrThrow().getDevice(), targetQ);
             batchData.getPredictions().put(Q.singletonOrThrow().getDevice(), Q);
-            this.trainer.step(); //Updates the model parameters
+            trainer.addMetric("training-metrics", time);
+
+            //trainer.step(); //Updates the model parameters
         }
+        trainer.notifyListeners(listener -> listener.onTrainingBatch(trainer, batchData));
+        
         for (Step step : batchSteps) {
             step.getPreObservation().attach(step.getManager());
             step.getPostObservation().attach(step.getManager());
         }
         temporaryManager.close();  //close the temporary manager
     }
+
 }
