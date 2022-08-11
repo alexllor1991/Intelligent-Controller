@@ -7,7 +7,8 @@ There are two folders:
 
 In case of running the **rlalgo package** independent of an SDN controller are necessary some steps:
 - Compile the package using the following command. 
-    mvn clean install -nsu -DskipTests -e
+  
+  mvn clean install -nsu -DskipTests -e
 - Export environment variables used by the application.
     export NDDSHOME=/home/alexllor/rti_connext_dds-5.2.3/
   export LD_LIBRARY_PATH=/home/alexllor/rti_connext_dds-5.2.3/lib/x64Linux3gcc4.8.2/:/home/alexllor/.djl.ai/mxnet/1.9.0-mkl-linux-x86_64/
