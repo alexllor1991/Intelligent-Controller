@@ -79,9 +79,9 @@ public class ODLBrain extends DataReaderAdapter {
     public static final float MAX_CPU_NODES = 4000f;
 	private static final float MAX_SOC_NODES = 100f;
 	private static final float usedResourcesCost = 0.2f;
-    private static final float zeta = 0.3f; // adjustable positive weight lifetime term
-	private static final float xi = 0.3f; // adjustable positive weight deployed service term
-	private static final float phi = 0.3f; // adjustable positive weight used resource cost term
+    private static final float zeta = 0.2f; // adjustable positive weight lifetime term
+	private static final float xi = 0.5f; // adjustable positive weight deployed service term   0.4f
+	private static final float phi = 0.3f; // adjustable positive weight used resource cost term 0.2f
 	public static int multiDeployedService = 0;
 	public static int multiRequestedService = 0;
 	public static int multiRejectedService = 0;
@@ -109,6 +109,7 @@ public class ODLBrain extends DataReaderAdapter {
 
     private static ConcurrentSkipListMap<String, Map<String, Float>> nodesSOCPerMaster; //Concurrent dictionary with master_node of cluster as main key; the values are another dictionary with nodeName as key and SOC of node as value.
 	public static ConcurrentSkipListMap<String, Map<String, Float>> nodesCPUPerMaster; //Concurrent dictionary with master_node of cluster as main key; the values are another dictionary with nodeName as key and CPU of node as value.
+	public static ConcurrentSkipListMap<String, Map<String, String>> nodesAvailabilityPerMaster; //Concurrent dictionary with master_node of cluster as main key; the values are another dictionary with nodeName as key and node's status as value.
 	private static ConcurrentSkipListMap<String, Map<String, String>> anyVNFInNodesPerMaster; //Concurrent dictionary with master_node of cluster as main key; the values are another dictionary with nodeName as key and boolean value indicating if there is any VNF deployed.
 	private static ConcurrentSkipListMap<String, Map<String, Map<String, List<String>>>> serviceRequestedPerMaster;
 	public static ConcurrentSkipListMap<String, Map<String, List<String>>> serviceRequestedtoDeploy;
@@ -142,6 +143,7 @@ public class ODLBrain extends DataReaderAdapter {
 
 	private static boolean areValuesnodesSOCPerMaster = false;
 	private static boolean areValuesnodesCPUPerMaster = false;
+	private static boolean areValuesnodesAvailabilityPerMaster = false;
 
 	private static final String CSV_FILE_RESULTS = "src/main/resources/model/Results.csv";
 	private static final String CSV_FILE_USAGE = "src/main/resources/model/Usage.csv";
@@ -171,7 +173,7 @@ public class ODLBrain extends DataReaderAdapter {
         int noClusters = 3;
 		int noNodes = 4;
 		numberNodes = noNodes;
-		int batchSize = 32;
+		int batchSize = 64; //32
 		boolean preTrained = false;
 		boolean testing = false;
 
@@ -217,6 +219,7 @@ public class ODLBrain extends DataReaderAdapter {
 		keys = new ConcurrentSkipListMap<String, String>();
 		nodesSOCPerMaster = new ConcurrentSkipListMap<String, Map<String, Float>>();
 		nodesCPUPerMaster = new ConcurrentSkipListMap<String, Map<String, Float>>();
+		nodesAvailabilityPerMaster = new ConcurrentSkipListMap<String, Map<String, String>>();
 		anyVNFInNodesPerMaster = new ConcurrentSkipListMap<String, Map<String, String>>();
 		serviceRequestedPerMaster = new ConcurrentSkipListMap<String, Map<String, Map<String, List<String>>>>();
 		serviceRequestedtoDeploy = new ConcurrentSkipListMap<String, Map<String, List<String>>>();
@@ -253,7 +256,7 @@ public class ODLBrain extends DataReaderAdapter {
 			pQos.discovery.initial_peers.add("239.255.0.1");
 			pQos.discovery.initial_peers.add("8@builtin.udpv4://127.0.0.1");
 			pQos.discovery.initial_peers.add("8@builtin.udpv4://147.83.118.141");
-			pQos.discovery.initial_peers.add("8@builtin.udpv4://172.16.10.48");
+			pQos.discovery.initial_peers.add("8@builtin.udpv4://172.16.10.49");
 			pQos.discovery.initial_peers.add("8@builtin.udpv4://163.117.140.219");
 			pQos.discovery.initial_peers.add("8@builtin.udpv4://172.16.2.230");
 			pQos.discovery.initial_peers.add("8@builtin.udpv4://172.16.2.152");
@@ -275,7 +278,7 @@ public class ODLBrain extends DataReaderAdapter {
 			com.rti.ndds.transport.TransportSupport
 					.get_builtin_transport_property(participant,
 							transportProperty);
-			transportProperty.public_address = "172.16.10.43"; //"172.28.26.115";
+			transportProperty.public_address = "172.16.10.47"; 
 			transportProperty.message_size_max = 65530;
 			transportProperty.recv_socket_buffer_size = 1048576;
 			transportProperty.send_socket_buffer_size = 65530;
@@ -633,12 +636,6 @@ public class ODLBrain extends DataReaderAdapter {
 		while (follow) {
 			try {
 				dataReader_global.take_next_sample(sample, info);
-				
-				//PrintStream originalOut = System.out;
-				
-				//PrintStream fileOut = new PrintStream(new FileOutputStream("./out.txt", true), true);
-				
-				//System.setOut(fileOut);
 
 				// Reading nodes' information belonging to registered clusters
 				if (sample.Identificador.equals("Node_Status")) {
@@ -658,6 +655,7 @@ public class ODLBrain extends DataReaderAdapter {
 						soc = Float.parseFloat(sample.LinkId);
 					} 
 					String anyVNFRunning = sample.SourceNode;
+					String nodeReady = sample.SourceNodeTp;
 
 					if (!ODLBrain.nodesSOCPerMaster.containsKey(participantDataInfo.participant_name.name)) {
 						ODLBrain.nodesSOCPerMaster.put(participantDataInfo.participant_name.name, new HashMap<String, Float>());
@@ -673,6 +671,13 @@ public class ODLBrain extends DataReaderAdapter {
 					} else {
 						ODLBrain.nodesCPUPerMaster.get(participantDataInfo.participant_name.name).put(k8snodeId, cpu);
 						//System.out.println(nodesCPUPerMaster);
+					}
+
+					if (!ODLBrain.nodesAvailabilityPerMaster.containsKey(participantDataInfo.participant_name.name)) {
+						ODLBrain.nodesAvailabilityPerMaster.put(participantDataInfo.participant_name.name, new HashMap<String, String>());
+						ODLBrain.areValuesnodesAvailabilityPerMaster = true;
+					} else {
+						ODLBrain.nodesAvailabilityPerMaster.get(participantDataInfo.participant_name.name).put(k8snodeId, nodeReady);
 					}
 
 					if (!ODLBrain.anyVNFInNodesPerMaster.containsKey(participantDataInfo.participant_name.name)) {
@@ -835,7 +840,7 @@ public class ODLBrain extends DataReaderAdapter {
 					*/
 				}
 
-				// Reading information regarding the status of the last VNf deployed.
+				// Reading information regarding the status of the last VNF deployed.
 				if (sample.Identificador.equals("VNF_Deployed")) {
 					PublicationBuiltinTopicData publicationData = new PublicationBuiltinTopicData();
 
@@ -910,6 +915,7 @@ public class ODLBrain extends DataReaderAdapter {
 					}
 				}
 
+				// Reading information regarding the status of the last VNF rejected.
 				if (sample.Identificador.equals("VNF_Rejected")) {
 					PublicationBuiltinTopicData publicationData = new PublicationBuiltinTopicData();
 
@@ -968,8 +974,6 @@ public class ODLBrain extends DataReaderAdapter {
 					ResAlloAlgo.setCurrentReward(0f);
 					isCurrentVNFRejected.set(true); 
 				}
-				
-				//System.setOut(originalOut);
 
 			} catch (RETCODE_NO_DATA noData) {
 				// No more data to read
@@ -1322,23 +1326,6 @@ public class ODLBrain extends DataReaderAdapter {
 							failureParticipants
 									.remove(participantData.participant_name.name);
 						}
-						
-                        /**
-						if (TutorialL2Forwarding.switchesACPerGC.containsKey(participantData.participant_name.name)) {
-							Set<String> ac = TutorialL2Forwarding.switchesACPerGC.get(participantData.participant_name.name).keySet();
-							
-							Iterator<String> iter = ac.iterator();
-							
-							while (iter.hasNext()) {
-								String acs = iter.next();
-								
-								if (TutorialL2Forwarding.switchesACPerGC.get(ownKeyName).containsKey(acs))  {
-									TutorialL2Forwarding.switchesACPerGC.get(ownKeyName).remove(acs);
-									System.out.println(switchesACPerGC);
-								}
-							}
-						}
-                        */
 
 					} else {
 						String dissapearReason;
@@ -1398,72 +1385,6 @@ public class ODLBrain extends DataReaderAdapter {
 							failureParticipants.put(
 									participantDataFail.participant_name.name,
 									participantDataFail);
-							/**
-							// Failover in my ACs
-							if (participantDataFail.participant_name.name
-									.endsWith("_UPC")) {
-								System.out
-										.println("Controller "
-												+ participantDataFail.participant_name.name
-												+ " with IP "
-												+ ipPublicControllerFail
-												+ " has failed. Executing failover");
-
-								Map<String, List<String>> tupleAC_Nodes = ControllerTarget(
-										ownKeyName,
-										participantDataFail.participant_name.name);
-
-								TutorialL2Forwarding
-										.migrateSwitches(tupleAC_Nodes);
-
-								// TutorialL2Forwarding.checkFailoverOwnACs(
-								// ipLocalControllerFail,
-								// ipControllerTarget);
-							}
-
-							// Failover in other ACs
-							if (participantDataFail.participant_name.name
-									.startsWith("AC")
-									&& !participantDataFail.participant_name.name
-											.endsWith("_UPC")) {
-
-								String itsGC = new String(
-										"GC"
-												+ participantDataFail.participant_name.name
-														.substring(3));
-
-								if (failureParticipants.containsKey(itsGC)) {
-									System.out
-											.println("Controller "
-													+ participantDataFail.participant_name.name
-													+ " with IP "
-													+ ipPublicControllerFail
-													+ " has failed. Executing failover");
-
-									Map<String, List<String>> tupleAC_Nodes = ControllerTarget(
-											itsGC,
-											participantDataFail.participant_name.name);
-
-									TutorialL2Forwarding
-											.migrateSwitches(tupleAC_Nodes);
-
-									// TutorialL2Forwarding
-									// .checkFailoverOtherACs(
-									// ipPublicControllerFail,
-									// ipControllerTarget,
-									// itsGC,
-									// participantDataFail.participant_name.name);
-
-								} else {
-									System.out
-											.println("Controller "
-													+ participantDataFail.participant_name.name
-													+ " with IP "
-													+ ipPublicControllerFail
-													+ " has failed. Execute failover");
-								}
-							}
-                            */
 						}
 					}
 				}
@@ -1697,6 +1618,12 @@ public class ODLBrain extends DataReaderAdapter {
 		return vnf_name;
 	}
 
+	/**
+	 * Method used by the DQN algorithm to get the service's name where 
+	 * the current VNFs belongs to
+	 * 
+	 * @return   name of the associated service to the current VNF to deploy
+	 */
 	public static String getServiceName() {
 		String service_name = "";
 		if (areValuesvnfRequestedtoDeploy.get() == true) {
@@ -1704,7 +1631,6 @@ public class ODLBrain extends DataReaderAdapter {
 				String key = ODLBrain.vnfRequestedtoDeploy.firstKey();
 				service_name = ODLBrain.vnfRequestedtoDeploy.get(key).get(4);
 				ODLBrain.currentService = service_name;
-
 			} 
 		}
 		return service_name;
@@ -1734,10 +1660,81 @@ public class ODLBrain extends DataReaderAdapter {
 				ODLBrain.vnfRequestedtoDeploy.remove(key);
 			}
 		}
+		System.out.println("Pending VNFs: " + Integer.toString(ODLBrain.vnfRequestedtoDeploy.size()));
 
 		NDArray vnf_request = manager.create(request);
 
 		return vnf_request;
+	}
+
+	/**
+	 * Method used by the DQN algorithm to create the node's status mask. 
+	 * Thus, only available nodes are considered during the Q_max calculation.
+	 * 
+	 * @param clusters  amount of managed clusters by this controller
+	 * @param nodes     amount of nodes in each cluster
+	 * @return   the node's status mask regarding available nodes
+	 */
+	public static NDArray getNodesMask(int clusters, int nodes) {
+		NDManager manager = NDManager.newBaseManager();
+		int indexes = (clusters * nodes) + 1;
+		float[] mask = new float[indexes];
+		
+		if (!ODLBrain.areValuesnodesAvailabilityPerMaster) {
+			for (int j = 0; j < indexes; j++) {
+				mask[j] = 1f;
+			}
+		} else {
+			NavigableSet<String> keysAvai = ODLBrain.nodesAvailabilityPerMaster.keySet();
+			Iterator<String> iteratorAvai = keysAvai.iterator();
+			//int i = 1;
+			mask[0] = 1f;
+			while (iteratorAvai.hasNext()) {
+				String next = iteratorAvai.next();
+				//Collection<String> avail = ODLBrain.nodesAvailabilityPerMaster.get(next).values();
+				//Iterator<String> avail_iter = avail.iterator();
+				Set<String> keysNode = ODLBrain.nodesAvailabilityPerMaster.get(next).keySet();
+				Iterator<String> iteratorNodes = keysNode.iterator();
+				/** 
+				while(avail_iter.hasNext()) {
+					String next1 = avail_iter.next();
+					if (next1.equals("True")) {
+						mask[i] = 1f;
+					} else {
+						mask[i] = 0f;
+					}
+					i++;
+				}
+				*/
+				while(iteratorNodes.hasNext()) {
+					String next1 = iteratorNodes.next();
+					String value = ODLBrain.nodesAvailabilityPerMaster.get(next).get(next1);
+
+					int cluster = Integer.parseInt(next.substring(next.lastIndexOf("e") + 1));
+                    int initialIndex = (cluster - 1) * nodes;
+
+					int nodeActionSpace = 0;
+					if (!next1.equals("kubernetes-control-plane")) {
+						nodeActionSpace = initialIndex + Integer.parseInt(next1.substring(next1.lastIndexOf("r") + 1));
+					} else {
+						nodeActionSpace = initialIndex + 4;
+					} 
+
+					if (value.equals("True")) {
+						mask[nodeActionSpace] = 1f;
+					} else {
+						mask[nodeActionSpace] = 0f;
+					}
+				}
+			}
+		}
+		//System.out.println(ODLBrain.nodesAvailabilityPerMaster);
+
+		NDArray availNodes = manager.create(mask);
+
+		//System.out.println(availNodes);
+
+		return availNodes;
 	}
 
 	/**
@@ -1807,6 +1804,7 @@ public class ODLBrain extends DataReaderAdapter {
 		float masterPenalization = 0.7f;
 		float overloadingNodePenalization = 1f;
 		float imbalancePenalization = 1f;
+
 		float lifetimeTerm = zeta * ODLBrain.getTotalLifeTime();
 		float deployedServiceTerm = xi * ODLBrain.multiDeployedService / ODLBrain.multiRequestedService;
 		float resourceCostTerm = phi * ODLBrain.getTotalCostUsedResources();

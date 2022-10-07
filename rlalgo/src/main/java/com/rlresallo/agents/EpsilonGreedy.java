@@ -2,6 +2,7 @@ package com.rlresallo.agents;
 
 import com.rlresallo.Environment;
 import ai.djl.ndarray.NDList;
+import ai.djl.ndarray.NDArray;
 import ai.djl.training.tracker.Tracker;
 import ai.djl.util.RandomUtils;
 import org.slf4j.Logger;
@@ -42,7 +43,7 @@ public class EpsilonGreedy implements RlAgent {
      * {@inheritDoc}
      */
     @Override
-    public NDList chooseAction(Environment env, boolean training, int nodes, int clusters) {
+    public NDList chooseAction(Environment env, boolean training, int nodes, int clusters, NDArray mask) {
         if (training && RandomUtils.random() < exploreRate.getNewValue(counter++)) {
             logger.info("**********RANDOM ACTION************");
             NDList action = env.getActionSpace().randomAction();
@@ -68,7 +69,7 @@ public class EpsilonGreedy implements RlAgent {
             //     return action;
             // }
 
-            if (!(action.singletonOrThrow().getInt(4) == 1) || !(action.singletonOrThrow().getInt(8) == 1) || !(action.singletonOrThrow().getInt(12) == 1)) {
+            if (action.singletonOrThrow().getInt(4) != 1 && action.singletonOrThrow().getInt(8) != 1 && action.singletonOrThrow().getInt(12) != 1) {
                 return action;
             } else {
                 while (action.singletonOrThrow().getInt(4) == 1 || action.singletonOrThrow().getInt(8) == 1 || action.singletonOrThrow().getInt(12) == 1) {
@@ -79,7 +80,7 @@ public class EpsilonGreedy implements RlAgent {
             }
 
             //return env.getActionSpace().randomAction();
-        } else return baseAgent.chooseAction(env, training, nodes, clusters);
+        } else return baseAgent.chooseAction(env, training, nodes, clusters, mask);
     }
 
     /**

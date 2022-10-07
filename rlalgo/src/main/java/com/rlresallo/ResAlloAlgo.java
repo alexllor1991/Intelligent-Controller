@@ -10,6 +10,7 @@ import ai.djl.ndarray.NDArray;
 import ai.djl.ndarray.NDArrays;
 import ai.djl.ndarray.NDList;
 import ai.djl.ndarray.NDManager;
+import ai.djl.util.RandomUtils;
 
 //import org.sdnhub.odl.tutorial.learningswitch.impl.TutorialL2Forwarding;
 import org.slf4j.Logger;
@@ -20,6 +21,17 @@ import org.slf4j.LoggerFactory;
 //import java.awt.image.BufferedImage;
 import java.util.*;
 import com.opencsv.CSVWriter;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.NavigableSet;
+import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -80,6 +92,7 @@ public class ResAlloAlgo implements Environment {
     private NDList lastAction;
     private ActionSpace actionSpace;
     private NDArray status;
+    private NDArray mask;
     private String currentVNFName;
     private String serviceName;
     private NDArray vnfRequest;
@@ -130,15 +143,15 @@ public class ResAlloAlgo implements Environment {
             actionSpace.add(new NDList(manager.create(NODE1_3)));
             actionSpace.add(new NDList(manager.create(NODE2_3)));
             actionSpace.add(new NDList(manager.create(NODE3_3)));
-            actionSpace.add(new NDList(manager.create(NODE4_3)));
+            actionSpace.add(new NDList(manager.create(NODE4_3))); //controller node cluster 1
             actionSpace.add(new NDList(manager.create(NODE5_3)));
             actionSpace.add(new NDList(manager.create(NODE6_3)));
             actionSpace.add(new NDList(manager.create(NODE7_3)));
-            actionSpace.add(new NDList(manager.create(NODE8_3)));
+            actionSpace.add(new NDList(manager.create(NODE8_3))); //controller node cluster 2
             actionSpace.add(new NDList(manager.create(NODE9_3)));
             actionSpace.add(new NDList(manager.create(NODE10_3)));
             actionSpace.add(new NDList(manager.create(NODE11_3)));
-            actionSpace.add(new NDList(manager.create(NODE12_3)));
+            actionSpace.add(new NDList(manager.create(NODE12_3))); //controller node cluster 3
         }
 
         file_dataset = new File(CSV_FILE_DATASET);
@@ -197,7 +210,9 @@ public class ResAlloAlgo implements Environment {
     public static int trainStep = 0;
     private static boolean currentTerminal = false;
     private static boolean rejectedLastVNF = false;
+    private static boolean assumedVNFRejected = false;
     private static float currentReward = 0.0f;
+    private static float averageRewardEpoch = 0.0f;
     private String trainState = "observe";
     private static NDList extCurrentObservation;
 
@@ -218,19 +233,70 @@ public class ResAlloAlgo implements Environment {
         vnfRequest = ODLBrain.getVNFRequest();
         //System.out.println(vnfRequest);
         currentObservation = createObservation(status, vnfRequest);
+        mask = ODLBrain.getNodesMask(clusters, nodes);
         ResAlloAlgo.setExtCurrentObservation(currentObservation);
         System.out.println();
         System.out.println("------------Current observation before step environment------------");
         System.out.println(Arrays.toString(currentObservation.toArray()));
-        //System.out.println(currentVNFName);
 
         System.out.println("------------Choosing action-----------");
-        NDList action = agent.chooseAction(this, training, nodes, clusters);
-        //System.out.println(Arrays.toString(action.toArray()));
+        NDList action = agent.chooseAction(this, training, nodes, clusters, mask);
+
         if (!lastAction.isEmpty()) {
-            if (lastAction.singletonOrThrow().contentEquals(action.singletonOrThrow()) && currentReward == 0.0f && rejectedLastVNF) {
-                action = getActionSpace().randomAction();
-                rejectedLastVNF = false;
+            if ((lastAction.singletonOrThrow().contentEquals(action.singletonOrThrow()) && currentReward == 0.0f && rejectedLastVNF) || assumedVNFRejected) {
+                NavigableSet<String> keys = ODLBrain.usingNodes.keySet();
+                Iterator<String> iteratorKey = keys.iterator();
+                List<Integer> indexNodesActionSpace = new ArrayList<Integer>();
+                boolean availableUsedMultipleNodes = false;
+
+                while (iteratorKey.hasNext()) {
+                    String master = iteratorKey.next();
+                    List<String> usedNodes = ODLBrain.usingNodes.get(master);
+
+                    int cluster = Integer.parseInt(master.substring(master.lastIndexOf("e") + 1));
+                    int initialIndex = (cluster - 1) * nodes;
+        
+                    for (int i = 0; i < usedNodes.size(); i++) {
+                        String node = usedNodes.get(i);
+                        int index = 0;
+        
+                        if (!node.equals("kubernetes-control-plane")) {
+                            index = initialIndex + Integer.parseInt(node.substring(node.lastIndexOf("r") + 1));
+                        } else {
+                            index = initialIndex;
+                        }
+                        
+                        float capacity = currentObservation.singletonOrThrow().getFloat(index);
+                        if (capacity < 0.875f) {
+                            availableUsedMultipleNodes = true;
+                            int nodeActionSpace = 0;
+                            if (!node.equals("kubernetes-control-plane")) {
+                                nodeActionSpace = initialIndex + Integer.parseInt(node.substring(node.lastIndexOf("r") + 1));
+                            } else {
+                                nodeActionSpace = initialIndex + 4;
+                            } 
+                            indexNodesActionSpace.add(nodeActionSpace);
+                        }
+                    }    
+                }
+
+                if (!availableUsedMultipleNodes) {
+                    System.out.println("------------Random action------------");
+                    action = getActionSpace().randomAction();
+                    while (true) {
+                        if (action.singletonOrThrow().getInt(4) == 1 || action.singletonOrThrow().getInt(8) == 1 || action.singletonOrThrow().getInt(12) == 1) {
+                            action = getActionSpace().randomAction();
+                        } else {
+                            break;
+                        }
+                    }
+                    rejectedLastVNF = false;
+                } else {
+                    int size = indexNodesActionSpace.size();
+                    int indexAction = indexNodesActionSpace.get(RandomUtils.nextInt(size));
+                    action = actionSpace.get(indexAction);
+                }
+                assumedVNFRejected = false;
             }
         }
 
@@ -292,8 +358,9 @@ public class ResAlloAlgo implements Environment {
                 int count = 0;
                 while (currentVNFName.length() > 1) {
                     //System.out.println("------Waiting VNF deployment------");
-                    if (ODLBrain.currentVNFDeployed() || ODLBrain.currentVNFRejected()) { //count == 60
-                        //if (count == 60) { //Assume current VNF has failed
+                    if (ODLBrain.currentVNFDeployed() || ODLBrain.currentVNFRejected() || count == 60) {
+                        if (count == 60) { //Assume current VNF has failed
+                            assumedVNFRejected = true;
                             //int failedVNFs = ODLBrain.getFailedVNFs();
                             //ODLBrain.multiFailedVNFs.set(failedVNFs + 1);
                             //ODLBrain.multiFailedVNFs.getAndIncrement();
@@ -319,13 +386,13 @@ public class ResAlloAlgo implements Environment {
                             //ODLBrain.multiRejectedVNFs.set(rejectedVNFs + delta);
                             //ODLBrain.multiRejectedVNFs.getAndAdd(delta);
                             //ResAlloAlgo.setCurrentReward(0f);
-                        //}
-                        //count = 0;
+                        }
+                        count = 0;
                         break;
                     }
                     try {
                         Thread.sleep(1000);
-                        //count++;
+                        count++;
                     } catch  (InterruptedException e){
                         e.printStackTrace();
                     }   
@@ -456,8 +523,6 @@ public class ResAlloAlgo implements Environment {
     }
 
     public NDList createObservation(NDArray status, NDArray vnfRequest) {
-        //return new NDList(status, vnfRequest);
-        //return new NDList(NDArrays.stack(new NDList(status, vnfRequest), 1));
         return new NDList(NDArrays.concat(new NDList(status, vnfRequest)));
     }
 
@@ -574,6 +639,14 @@ public class ResAlloAlgo implements Environment {
 
     public static void setCurrentReward(float currentReward) {
         ResAlloAlgo.currentReward = currentReward;
+    }
+
+    public static void setEpochReward(float averageReward) {
+        ResAlloAlgo.averageRewardEpoch = averageReward;
+    }
+
+    public static float getEpochReward() {
+        return ResAlloAlgo.averageRewardEpoch;
     }
 
     public static NDList getExtCurrentObservation() {
