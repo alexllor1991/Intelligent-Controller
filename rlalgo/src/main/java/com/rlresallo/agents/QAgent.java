@@ -43,7 +43,6 @@ public class QAgent implements RlAgent {
     
     private Trainer trainer;  //Trainer provides an easy, and manageable interface for training. The trainer for the model to learn. 
     private float rewardDiscount; //Value to apply to rewards from future states. 
-    //private int epoch;
     private ParameterStore parameterStore;
     private Trainer targetTrainer;
     /**
@@ -52,20 +51,11 @@ public class QAgent implements RlAgent {
     public QAgent(Trainer trainer, float rewardDiscount, Model model, DefaultTrainingConfig config, int batchSize, int Inputs) {
         this.trainer = trainer;
         this.rewardDiscount = rewardDiscount;
-        //epoch = 0;
         targetTrainer = model.newTrainer(config);
         targetTrainer.initialize(new Shape(batchSize, Inputs));
 
         syncNets();
     }
-
-    /**
-    public QAgent(Trainer trainer, float rewardDiscount) {
-        this.trainer = trainer;
-        this.rewardDiscount = rewardDiscount;
-        //epoch = 0;
-    }
-    */
 
     private static final Logger logger = LoggerFactory.getLogger(QAgent.class);
 
@@ -83,10 +73,7 @@ public class QAgent implements RlAgent {
         actionReward = actionReward.mul(mask);
         logger.info(Arrays.toString(actionReward.toFloatArray()));
         int bestAction = Math.toIntExact(actionReward.argMax().getLong());
-        //System.out.println(bestAction);
-        //System.out.println(env.getObservation().singletonOrThrow().getFloat(1));
-        //System.out.println(env.getObservation().singletonOrThrow().getFloat(2));
-        //System.out.println(env.getObservation().singletonOrThrow().getFloat(3));
+
         if (clusters == 1 && (env.getObservation().singletonOrThrow().getFloat(1) < 0.9f || env.getObservation().singletonOrThrow().getFloat(2) < 0.9f || env.getObservation().singletonOrThrow().getFloat(3) < 0.9f)) {
             availableResourcesComp = true;
         }
@@ -98,10 +85,7 @@ public class QAgent implements RlAgent {
         }
         if (actionSpace.get(bestAction).singletonOrThrow().getInt(nodes) == 1 && availableResourcesComp == true) {
             NDArray actionRewardIndexesSorted = actionReward.argSort();
-            //System.out.println(actionRewardIndexesSorted);
             System.out.println(Arrays.toString(actionRewardIndexesSorted.toArray()));
-            //System.out.println(actionRewardIndexesSorted.toLongArray()[3]);
-            //System.out.println(actionRewardIndexesSorted.toLongArray()[2]);
             if (clusters == 1) {
                 secondBestAction = Math.toIntExact(actionRewardIndexesSorted.toLongArray()[3]);
                 if (secondBestAction == 0) {
@@ -132,7 +116,6 @@ public class QAgent implements RlAgent {
      */
     @Override
     public void trainBatch(Step[] batchSteps) {
-        //epoch++;
 
         if (ResAlloAlgo.trainStep > 0 && ResAlloAlgo.trainStep % TrainResAlloAlgo.SYNC_NETS_EVERY_STEPS == 0) {
             syncNets();
@@ -169,7 +152,6 @@ public class QAgent implements RlAgent {
         //GradientCollector provides a mechanism to collect gradients during training.
         try (GradientCollector collector = trainer.newGradientCollector()) { 
             NDList QReward = trainer.forward(preInput);
-            //NDList targetQReward = trainer.forward(postInput);
             NDList targetQReward = targetTrainer.forward(postInput);
 
             NDList Q = new NDList(QReward.singletonOrThrow().mul(actionInput.singletonOrThrow()).sum(new int[]{1}));
@@ -207,12 +189,11 @@ public class QAgent implements RlAgent {
     }
 
     /**
-	 * Method used during the training phase to synchronize the model's weights 
+     * Method used during the training phase to synchronize the model's weights 
      * of the target network with through the ones of the online network.
-	 */
+    */
     protected final void syncNets() {
         for (Pair<String, Parameter> params : trainer.getModel().getBlock().getParameters()) {
-            //targetTrainer.getModel().getBlock().getParameters().get(params.getKey()).getArray().set(params.getValue().getArray().duplicate());
             params.getValue().getArray().duplicate().copyTo(targetTrainer.getModel().getBlock().getParameters().get(params.getKey()).getArray());
         }
     }
