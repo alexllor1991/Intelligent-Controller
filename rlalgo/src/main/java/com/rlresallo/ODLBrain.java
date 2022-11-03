@@ -91,15 +91,11 @@ public class ODLBrain extends DataReaderAdapter {
 	public static int multiDeployedService = 0;
 	public static int multiRequestedService = 0;
 	public static int multiRejectedService = 0;
-	//public static AtomicInteger multiRejectedService = new AtomicInteger();
 	public static int multiDeployedVNFs = 0;
 	public static int multiRequestedVNFs = 0; 
 	public static int multiRejectedVNFs = 0;
-	//public static AtomicInteger multiRejectedVNFs = new AtomicInteger();
-	public static int deadlineViolations = 0;
 	public static int multiFailedVNFs = 0;
 	public static int multiDiscardVNFs = 0;
-	//public static AtomicInteger multiFailedVNFs = new AtomicInteger(); 
 	private static String currentVNF = "";
 	private static String currentService = "";
 	public static AtomicBoolean isCurrentVNFDeployed;
@@ -185,7 +181,7 @@ public class ODLBrain extends DataReaderAdapter {
         int noClusters = 3;
 		int noNodes = 4;
 		numberNodes = noNodes;
-		int batchSize = 64; //32
+		int batchSize = 64; 
 		boolean preTrained = true;
 		boolean testing = false;
 
@@ -200,8 +196,7 @@ public class ODLBrain extends DataReaderAdapter {
 								  "Scheduled_VNFs", 
 								  "Rejected_VNFs", 
 								  "Failed_VNFs", 
-								  "Discarded_VNFs",
-								  "Deadline_violations"};
+								  "Discarded_VNFs"};
 
 		String[] headerUsage = {"Timestamp",
 								"Cluster",
@@ -271,9 +266,7 @@ public class ODLBrain extends DataReaderAdapter {
 			pQos.discovery.initial_peers.setMaximum(8);
 			pQos.discovery.initial_peers.add("239.255.0.1");
 			pQos.discovery.initial_peers.add("8@builtin.udpv4://127.0.0.1");
-			pQos.discovery.initial_peers.add("8@builtin.udpv4://147.83.118.141");
 			pQos.discovery.initial_peers.add("8@builtin.udpv4://172.16.10.48");
-			pQos.discovery.initial_peers.add("8@builtin.udpv4://163.117.140.219");
 			pQos.discovery.initial_peers.add("8@builtin.udpv4://172.16.2.230");
 			pQos.discovery.initial_peers.add("8@builtin.udpv4://172.16.2.152");
 			pQos.discovery.initial_peers.add("8@builtin.shmem://");
@@ -281,7 +274,6 @@ public class ODLBrain extends DataReaderAdapter {
 			pQos.discovery.multicast_receive_addresses.setMaximum(2);
 			pQos.discovery.multicast_receive_addresses.add("239.255.0.1");
 			pQos.participant_name.name = "GC_UPC_1";
-			//pQos.user_data.value.addAllByte(id.getBytes());
 
 			participant = DomainParticipantFactory.TheParticipantFactory
 					.create_participant(0, pQos, null,
@@ -343,34 +335,11 @@ public class ODLBrain extends DataReaderAdapter {
 			System.err.println("Unable to create topic.");
 			return;
 		}
-
-		// Getting the default PublisherQoS and adding a partition name
-
-		//PublisherQos pub_qos_local = new PublisherQos();
-		//participant.get_default_publisher_qos(pub_qos_local);
-		//pub_qos_local.partition.name.clear();
-		//pub_qos_local.partition.name.add("mainupc");
-		//pub_qos_local.partition.name.add("backup");
 		
 		PublisherQos pub_qos_global = new PublisherQos();
 		participant.get_default_publisher_qos(pub_qos_global);
 		pub_qos_global.partition.name.clear();
 		pub_qos_global.exclusive_area.use_shared_exclusive_area = true;
-		//pub_qos_global.partition.name.add("global");
-
-		// Publisher for communication GC-AC
-
-		/**
-		publisher_local = participant.create_publisher(pub_qos_local, null,
-				StatusKind.STATUS_MASK_NONE);
-
-		if (publisher_local == null) {
-			System.err.println("Unable to create publisher\n");
-			return;
-		}
-		*/
-		
-		// Publisher for communication GC-GC
 
 		publisher_global = participant.create_publisher(pub_qos_global, null,
 				StatusKind.STATUS_MASK_NONE);
@@ -389,8 +358,6 @@ public class ODLBrain extends DataReaderAdapter {
 		dwqos.reliability.kind = ReliabilityQosPolicyKind.RELIABLE_RELIABILITY_QOS;
 		dwqos.history.kind = HistoryQosPolicyKind.KEEP_ALL_HISTORY_QOS;
 		dwqos.durability.kind = DurabilityQosPolicyKind.TRANSIENT_LOCAL_DURABILITY_QOS;
-		// dwqos.reliability.max_blocking_time.sec = 0;
-		// dwqos.reliability.max_blocking_time.nanosec = 8 * alertWithinMs * 1000000;
 		dwqos.reliability.max_blocking_time.sec = 2;
 		dwqos.reliability.max_blocking_time.nanosec = 0;
 		dwqos.resource_limits.max_samples = com.rti.dds.infrastructure.ResourceLimitsQosPolicy.LENGTH_UNLIMITED;
@@ -420,37 +387,11 @@ public class ODLBrain extends DataReaderAdapter {
 		
 		InstanceHandle_t instancelocal_g = dataWriter_global.get_instance_handle();
 		participant.ignore_publication(instancelocal_g);
-
-		// DataWriter for communication GC-AC
-
-		/** 
-		dataWriter_local = (topologiaDataWriter) publisher_local.create_datawriter(
-				topic, dwqos, null, // listener
-				StatusKind.STATUS_MASK_NONE);
-		if (dataWriter_local == null) {
-			System.err.println("Unable to create data writer\n");
-			return;
-		}
-		
-		InstanceHandle_t instancelocal_l = dataWriter_local.get_instance_handle();
-		participant.ignore_publication(instancelocal_l);
-		*/
-
-		// Getting the default SubscriberQoS and adding a partition name
-		
-		//SubscriberQos sub_qos_local = new SubscriberQos();
-		//participant.get_default_subscriber_qos(sub_qos_local);
-		//sub_qos_local.partition.name.clear();
-		//sub_qos_local.partition.name.add("mainupc");
-		//sub_qos_local.partition.name.add("backup");
 		
 		SubscriberQos sub_qos_global = new SubscriberQos();
 		participant.get_default_subscriber_qos(sub_qos_global);
 		sub_qos_global.partition.name.clear();
 		sub_qos_global.exclusive_area.use_shared_exclusive_area = true;
-		//sub_qos_global.partition.name.add("global");
-		
-		// Subscriber for communication GC-GC
 		
 		subscriber_global = participant.create_subscriber(sub_qos_global, null, StatusKind.STATUS_MASK_NONE);
 				
@@ -458,18 +399,6 @@ public class ODLBrain extends DataReaderAdapter {
 			System.err.println("Unable to create subscriber\n");
 			return;
 		}
-
-		// Subscriber for communication GC-AC
-
-		/**
-		subscriber_local = participant.create_subscriber(sub_qos_local, null,
-				StatusKind.STATUS_MASK_NONE);
-
-		if (subscriber_local == null) {
-			System.err.println("Unable to create subscriber\n");
-			return;
-		}
-		*/
 
 		// Getting the default DataReaderQoS and adding other parameters
 
@@ -488,10 +417,6 @@ public class ODLBrain extends DataReaderAdapter {
 		drqos.protocol.rtps_reliable_reader.max_heartbeat_response_delay.sec = 0;
 		drqos.protocol.rtps_reliable_reader.max_heartbeat_response_delay.nanosec = 0;
 		drqos.subscription_name.name = "GC_UPC_1";
-
-		// DataReader for communication GC-GC
-
-		//ReaderListener reader_listener = new ReaderListener();
 		
 		dataReader_global = (topologiaDataReader) subscriber_global
 				.create_datareader(topic, drqos, null, // Listener
@@ -500,18 +425,6 @@ public class ODLBrain extends DataReaderAdapter {
 			System.err.println("Unable to create DDS Data Reader");
 			return;
 		}
-
-		// DataReader for communication GC-AC
-
-		/**
-		dataReader_local = (topologiaDataReader) subscriber_local.create_datareader(
-				topic, drqos, null,// listener
-				StatusKind.STATUS_MASK_NONE);
-		if (dataReader_local == null) {
-			System.err.println("Unable to create DDS Data Reader");
-			return;
-		}
-		*/
 
 		// Configuring the reader conditions using StatusCondition and WaitSet
 		
@@ -524,22 +437,10 @@ public class ODLBrain extends DataReaderAdapter {
 			return;
 		}
 		
-		/**
-		StatusCondition status_condition_local = dataReader_local
-				.get_statuscondition();
-		if (status_condition_local == null) {
-			System.err.println("get_statuscondition error\n");
-			return;
-		}
-		*/
-		
 		status_condition_global
 				.set_enabled_statuses(StatusKind.DATA_AVAILABLE_STATUS);
-		//status_condition_local
-		//		.set_enabled_statuses(StatusKind.DATA_AVAILABLE_STATUS);
 
 		waitset.attach_condition(status_condition_global);
-		//waitset.attach_condition(status_condition_local);
 
 		final long receivedata = 1;
 
@@ -592,16 +493,6 @@ public class ODLBrain extends DataReaderAdapter {
 					}
 				}
 
-				/**
-				if (active_condition_seq.get(i) == status_condition_local) {
-					int triggerMask_local = dataReader_local
-							.get_status_changes();
-					// Data available
-					if ((triggerMask_local & StatusKind.DATA_AVAILABLE_STATUS) != 0) {
-						on_data_available_local();
-					}
-				}
-				*/
 			}
 			try {
 				Thread.sleep(receivedata * 1000);
@@ -641,21 +532,6 @@ public class ODLBrain extends DataReaderAdapter {
 		return value;
 	}
 
-	//public static int getFailedVNFs() {
-	//	int value = multiFailedVNFs.get();
-	//	return value;
-	//}
-
-	//public static int getRejectedVNFs() {
-	//	int value = multiRejectedVNFs.get();
-	//	return value;
-	//}
-
-	//public static int getRejectedServices() {
-	//	int value = multiRejectedService.get();
-	//	return value;
-	//}
-
 	private static void on_data_available_global() {
 
 		SampleInfo info = new SampleInfo();
@@ -691,7 +567,6 @@ public class ODLBrain extends DataReaderAdapter {
 						ODLBrain.areValuesnodesSOCPerMaster = true;
 					} else {
 						ODLBrain.nodesSOCPerMaster.get(participantDataInfo.participant_name.name).put(k8snodeId, soc);
-						//System.out.println(nodesSOCPerMaster);
 					}
 
 					if (!ODLBrain.nodesCPUPerMaster.containsKey(participantDataInfo.participant_name.name)) {
@@ -699,7 +574,6 @@ public class ODLBrain extends DataReaderAdapter {
 						ODLBrain.areValuesnodesCPUPerMaster = true;
 					} else {
 						ODLBrain.nodesCPUPerMaster.get(participantDataInfo.participant_name.name).put(k8snodeId, cpu);
-						//System.out.println(nodesCPUPerMaster);
 					}
 
 					if (!ODLBrain.nodesAvailabilityPerMaster.containsKey(participantDataInfo.participant_name.name)) {
@@ -713,7 +587,7 @@ public class ODLBrain extends DataReaderAdapter {
 						ODLBrain.anyVNFInNodesPerMaster.put(participantDataInfo.participant_name.name, new HashMap<String, String>());
 					} else {
 						ODLBrain.anyVNFInNodesPerMaster.get(participantDataInfo.participant_name.name).put(k8snodeId, anyVNFRunning);
-						//System.out.println(anyVNFInNodesPerMaster);
+
 					}
 
 					LocalDateTime timestamp = LocalDateTime.now();
@@ -757,23 +631,7 @@ public class ODLBrain extends DataReaderAdapter {
 					}
 					String vnfDeadline = sample.SourceNodeTp;
 					vnfsInService = sample.DestinationNodeTp;
-					/*
-					if (sample.DestinationNodeTp.equals("0")) { // Check if service was deployed
-						TutorialL2Forwarding.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).remove(serviceId);
-						float reward = TutorialL2Forwarding.calculateReward();
-						ResAlloAlgo.setCurrentReward(reward);
-					} else if (sample.DestinationNodeTp.equals("-1")) { // Check if service was rejected
-						Set<String> keysNodes = TutorialL2Forwarding.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).get(serviceId).keySet();
-						Iterator<String> iterNodes = keysNodes.iterator();
-						while (iterNodes.hasNext()) {
-							TutorialL2Forwarding.vnfRequestedtoDeploy.remove(iterNodes.next());
-						}
-						TutorialL2Forwarding.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).remove(serviceId);
-						ResAlloAlgo.setCurrentReward(0f);
-					} else {
-						vnfsInService = sample.DestinationNodeTp;
-					}
-					*/
+
 					String isMultiClusterDeployment = sample.SourceNode;
 					List<String> vnfRequirements = new ArrayList<String>();
 					vnfRequirements.add(0, Float.toString(vnfCpuRequested));
@@ -788,11 +646,9 @@ public class ODLBrain extends DataReaderAdapter {
 					} 
 					if (!ODLBrain.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).containsKey(serviceId)) {
 						ODLBrain.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).put(serviceId, new HashMap<String, List<String>>());
-					//}
-					//if (!ODLBrain.serviceRequestedtoDeploy.containsKey(serviceId)) {	
+	
 						ODLBrain.serviceRequestedtoDeploy.put(serviceId, new HashMap<String, List<String>>());
 						ODLBrain.multiRequestedService++;
-						//System.out.println("Multi-requested services: " + Integer.toString(ODLBrain.multiRequestedService));
 
 						LocalDateTime timestamp = LocalDateTime.now();
 						String[] result = {timestamp.toString(), 		//timestamp
@@ -803,8 +659,7 @@ public class ODLBrain extends DataReaderAdapter {
 										   Integer.toString(ODLBrain.multiDeployedVNFs), 
 										   Integer.toString(ODLBrain.multiRejectedVNFs), 
 										   Integer.toString(ODLBrain.multiFailedVNFs), 
-										   Integer.toString(ODLBrain.multiDiscardVNFs),
-										   Integer.toString(ODLBrain.deadlineViolations)};				
+										   Integer.toString(ODLBrain.multiDiscardVNFs)};				
 	
 						try {
 							writerResults.writeNext(result);
@@ -816,12 +671,9 @@ public class ODLBrain extends DataReaderAdapter {
 					}
 					if (!ODLBrain.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).get(serviceId).containsKey(vnfId)) {
 						ODLBrain.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).get(serviceId).put(vnfId, vnfRequirements);
-					//}
-					//if (!ODLBrain.serviceRequestedtoDeploy.get(serviceId).containsKey(vnfId)) {	
+	
 						ODLBrain.serviceRequestedtoDeploy.get(serviceId).put(vnfId, vnfRequirements);
 						ODLBrain.multiRequestedVNFs++;
-						//System.out.println("Multi-requested VNFs: " + Integer.toString(ODLBrain.multiRequestedVNFs));
-						//System.out.println(ODLBrain.serviceRequestedPerMaster);
 
 						LocalDateTime timestamp = LocalDateTime.now();
 						String[] result = {timestamp.toString(), 		//timestamp
@@ -832,8 +684,7 @@ public class ODLBrain extends DataReaderAdapter {
 										   Integer.toString(ODLBrain.multiDeployedVNFs), 
 										   Integer.toString(ODLBrain.multiRejectedVNFs), 
 										   Integer.toString(ODLBrain.multiFailedVNFs), 
-										   Integer.toString(ODLBrain.multiDiscardVNFs),
-										   Integer.toString(ODLBrain.deadlineViolations)};				
+										   Integer.toString(ODLBrain.multiDiscardVNFs)};				
 
 						try {
 							writerResults.writeNext(result);
@@ -845,34 +696,8 @@ public class ODLBrain extends DataReaderAdapter {
 
 					if (!ODLBrain.vnfRequestedtoDeploy.containsKey(vnfId) && isMultiClusterDeployment.equals("True")) {
 						ODLBrain.vnfRequestedtoDeploy.put(vnfDeadline.concat(vnfId), vnfRequirements);
-						//ODLBrain.setVariableareValuesvnfRequestedtoDeploy(true);
 						areValuesvnfRequestedtoDeploy.set(true);
 					}
-
-					/*
-					if (!sample.DestinationNodeTp.equals("0") || !sample.DestinationNodeTp.equals("-1")) {
-						List<String> vnfRequirements = new ArrayList<String>();
-						vnfRequirements.add(0, Integer.toString(vnfCpuRequested));
-						vnfRequirements.add(1, Integer.toString(vnfRunningTime));
-						vnfRequirements.add(2, vnfDeadline);
-						vnfRequirements.add(3, vnfsInService);
-						vnfRequirements.add(4, serviceId);
-						vnfRequirements.add(5, "not deployed");
-
-						if (!TutorialL2Forwarding.serviceRequestedPerMaster.containsKey(participantDataInfo.participant_name.name)) {
-							TutorialL2Forwarding.serviceRequestedPerMaster.put(participantDataInfo.participant_name.name, new HashMap<String, Map<String, List<String>>>());
-						} 
-						if (!TutorialL2Forwarding.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).containsKey(serviceId)) {
-							TutorialL2Forwarding.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).put(serviceId, new HashMap<String, List<String>>());
-						}
-						if (!TutorialL2Forwarding.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).get(serviceId).containsKey(vnfId)) {
-							TutorialL2Forwarding.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).get(serviceId).put(vnfId, vnfRequirements);
-						}
-						if (!TutorialL2Forwarding.vnfRequestedtoDeploy.containsKey(vnfId) && isMultiClusterDeployment.equals("True")) {
-							TutorialL2Forwarding.vnfRequestedtoDeploy.put(vnfDeadline.concat(vnfId), vnfRequirements);
-						}
-					}
-					*/
 				}
 
 				// Reading information regarding the status of the last VNF deployed.
@@ -889,10 +714,8 @@ public class ODLBrain extends DataReaderAdapter {
 
 					System.out.println(vnfId + " deployed in cluster: " + participantDataInfo.participant_name.name);
 
-					if (vnfId.equals(ODLBrain.currentVNF)) {
-						//isCurrentVNFDeployed.set(true); 
+					if (vnfId.equals(ODLBrain.currentVNF)) { 
 						ODLBrain.multiDeployedVNFs++;
-						//System.out.println("Multi-deployed VNFs: " + Integer.toString(ODLBrain.multiDeployedVNFs));
 
 						LocalDateTime timestamp = LocalDateTime.now();
 						String[] result = {timestamp.toString(), 		//timestamp
@@ -903,8 +726,7 @@ public class ODLBrain extends DataReaderAdapter {
 										   Integer.toString(ODLBrain.multiDeployedVNFs), 
 										   Integer.toString(ODLBrain.multiRejectedVNFs), 
 										   Integer.toString(ODLBrain.multiFailedVNFs), 
-										   Integer.toString(ODLBrain.multiDiscardVNFs),
-										   Integer.toString(ODLBrain.deadlineViolations)};				
+										   Integer.toString(ODLBrain.multiDiscardVNFs)};				
 	
 						try {
 							writerResults.writeNext(result);
@@ -924,7 +746,6 @@ public class ODLBrain extends DataReaderAdapter {
 						if (!ODLBrain.servicesState.containsKey(service)) {
 							ODLBrain.servicesState.put(service, "Deployed");
 						}
-						//System.out.println("Multi-deployed Services: " + Integer.toString(ODLBrain.multiDeployedService));
 
 						LocalDateTime timestamp = LocalDateTime.now();
 						String[] result = {timestamp.toString(), 		//timestamp
@@ -935,8 +756,7 @@ public class ODLBrain extends DataReaderAdapter {
 										   Integer.toString(ODLBrain.multiDeployedVNFs), 
 										   Integer.toString(ODLBrain.multiRejectedVNFs), 
 										   Integer.toString(ODLBrain.multiFailedVNFs), 
-										   Integer.toString(ODLBrain.multiDiscardVNFs),
-										   Integer.toString(ODLBrain.deadlineViolations)};				
+										   Integer.toString(ODLBrain.multiDiscardVNFs)};				
 	
 						try {
 							writerResults.writeNext(result);
@@ -975,14 +795,11 @@ public class ODLBrain extends DataReaderAdapter {
 							.get(publicationData.participant_key.toString());
 
 					String vnfId = sample.NodeId;
-					//String service = sample.TerminationPointId;
 
 					System.out.println(vnfId + " rejected in cluster: " + participantDataInfo.participant_name.name);
 
 					if (vnfId.equals(ODLBrain.currentVNF)) {
-						//isCurrentVNFDeployed.set(true); 
 						ODLBrain.multiFailedVNFs++;
-						//System.out.println("Multi-deployed VNFs: " + Integer.toString(ODLBrain.multiDeployedVNFs));
 
 						int vnfServScheduled = 0;
 						Set<String> keysVNfs = ODLBrain.serviceRequestedtoDeploy.get(ODLBrain.currentService).keySet();
@@ -1017,8 +834,7 @@ public class ODLBrain extends DataReaderAdapter {
 										   Integer.toString(ODLBrain.multiDeployedVNFs), 
 										   Integer.toString(ODLBrain.multiRejectedVNFs), 
 										   Integer.toString(ODLBrain.multiFailedVNFs),
-										   Integer.toString(ODLBrain.multiDiscardVNFs), 
-										   Integer.toString(ODLBrain.deadlineViolations)};				
+										   Integer.toString(ODLBrain.multiDiscardVNFs)};				
 	
 						try {
 							writerResults.writeNext(result);
@@ -1065,261 +881,10 @@ public class ODLBrain extends DataReaderAdapter {
 					e.printStackTrace();
 				}
 				err.printStackTrace(fileErr);
-			//} catch (FileNotFoundException e) {
-			//	e.printStackTrace();
 			} finally {
 			}
 		}
 	}
-
-    /**
-	 * Class to implement a listener to access to the data sent by datawriters in DDS domain.
-	 */
-	/** 
-	public static class ReaderListener extends DataReaderAdapter {
-		public void on_data_available (DataReader reader) {
-
-			SampleInfo info = new SampleInfo();
-			topologia sample = new topologia();
-			topologiaDataReader dataReader = (topologiaDataReader) reader;
-			
-			boolean follow = true;
-			while (follow) {
-				try {
-					dataReader.take_next_sample(sample, info);
-					
-					//PrintStream originalOut = System.out;
-					
-					//PrintStream fileOut = new PrintStream(new FileOutputStream("./out.txt", true), true);
-					
-					//System.setOut(fileOut);
-	
-					// Reading nodes' information belonging to registered clusters
-					if (sample.Identificador.equals("Node_Status")) {
-	
-						PublicationBuiltinTopicData publicationData = new PublicationBuiltinTopicData();
-	
-						dataReader.get_matched_publication_data(publicationData, info.publication_handle);
-	
-						ParticipantBuiltinTopicData participantDataInfo = discoveredParticipants
-								.get(publicationData.participant_key.toString());
-	
-						// String keyIPPublicMaster = IPfromLocatorMetatraffic(participantDataInfo.metatraffic_unicast_locators);
-	
-						//System.out.println("Receiving node information from: "
-						//		+ participantDataInfo.participant_name.name);
-	
-						float soc = 0f;
-						//NodeId nodeId = new NodeId(sample.NodeId);
-						String k8snodeId = sample.NodeId;
-						float cpu = Float.parseFloat(sample.TerminationPointId); 
-						if (sample.LinkId.length() > 0) {
-							soc = Float.parseFloat(sample.LinkId);
-						} 
-						String anyVNFRunning = sample.SourceNode;
-	
-						//String nodeid = nodeId.getValue().toString();
-						//String k8snodeId = TranslateFormatControllerId(nodeid);
-						if (!ODLBrain.nodesSOCPerMaster.containsKey(participantDataInfo.participant_name.name)) {
-							ODLBrain.nodesSOCPerMaster.put(participantDataInfo.participant_name.name, new HashMap<String, Float>());
-							ODLBrain.areValuesnodesSOCPerMaster = true;
-						} else {
-							ODLBrain.nodesSOCPerMaster.get(participantDataInfo.participant_name.name).put(k8snodeId, soc);
-							System.out.println(nodesSOCPerMaster);
-						}
-	
-						if (!ODLBrain.nodesCPUPerMaster.containsKey(participantDataInfo.participant_name.name)) {
-							ODLBrain.nodesCPUPerMaster.put(participantDataInfo.participant_name.name, new HashMap<String, Float>());
-							ODLBrain.areValuesnodesCPUPerMaster = true;
-						} else {
-							ODLBrain.nodesCPUPerMaster.get(participantDataInfo.participant_name.name).put(k8snodeId, cpu);
-							System.out.println(nodesCPUPerMaster);
-						}
-	
-						if (!ODLBrain.anyVNFInNodesPerMaster.containsKey(participantDataInfo.participant_name.name)) {
-							ODLBrain.anyVNFInNodesPerMaster.put(participantDataInfo.participant_name.name, new HashMap<String, String>());
-						} else {
-							ODLBrain.anyVNFInNodesPerMaster.get(participantDataInfo.participant_name.name).put(k8snodeId, anyVNFRunning);
-							//System.out.println(anyVNFInNodesPerMaster);
-						}
-					}	
-	
-					// Reading service request with the current VNF to deploy, its requirements and remaining VNFs to deploy.
-					if (sample.Identificador.startsWith("serv-")) {
-						String vnfId = "";
-						float vnfCpuRequested = 0f;
-						int vnfRunningTime = 0;
-						String vnfsInService = "";
-						PublicationBuiltinTopicData publicationData = new PublicationBuiltinTopicData();
-	
-						dataReader.get_matched_publication_data(publicationData, info.publication_handle);
-	
-						ParticipantBuiltinTopicData participantDataInfo = discoveredParticipants
-								.get(publicationData.participant_key.toString());
-						
-						//System.out.println("Receiving service request from: " + participantDataInfo.participant_name.name);
-	
-						String serviceId = sample.Identificador;
-						if (sample.NodeId.length() > 0) {
-							vnfId = sample.NodeId;
-						}
-						if (Float.parseFloat(sample.TerminationPointId) != 0f) {
-							vnfCpuRequested = Float.parseFloat(sample.TerminationPointId);
-						}
-						if (Integer.parseInt(sample.LinkId) != 0) {
-							vnfRunningTime = Integer.parseInt(sample.LinkId);
-						}
-						String vnfDeadline = sample.SourceNodeTp;
-						vnfsInService = sample.DestinationNodeTp;
-						/*
-						if (sample.DestinationNodeTp.equals("0")) { // Check if service was deployed
-							TutorialL2Forwarding.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).remove(serviceId);
-							float reward = TutorialL2Forwarding.calculateReward();
-							ResAlloAlgo.setCurrentReward(reward);
-						} else if (sample.DestinationNodeTp.equals("-1")) { // Check if service was rejected
-							Set<String> keysNodes = TutorialL2Forwarding.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).get(serviceId).keySet();
-							Iterator<String> iterNodes = keysNodes.iterator();
-							while (iterNodes.hasNext()) {
-								TutorialL2Forwarding.vnfRequestedtoDeploy.remove(iterNodes.next());
-							}
-							TutorialL2Forwarding.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).remove(serviceId);
-							ResAlloAlgo.setCurrentReward(0f);
-						} else {
-							vnfsInService = sample.DestinationNodeTp;
-						}
-						
-						String isMultiClusterDeployment = sample.SourceNode;
-						List<String> vnfRequirements = new ArrayList<String>();
-						vnfRequirements.add(0, Float.toString(vnfCpuRequested));
-						vnfRequirements.add(1, Integer.toString(vnfRunningTime));
-						vnfRequirements.add(2, vnfDeadline);
-						vnfRequirements.add(3, vnfsInService);
-						vnfRequirements.add(4, serviceId);
-						vnfRequirements.add(5, "not deployed");
-						//System.out.println(vnfRequirements);
-						
-						if (!ODLBrain.serviceRequestedPerMaster.containsKey(participantDataInfo.participant_name.name)) {
-							ODLBrain.serviceRequestedPerMaster.put(participantDataInfo.participant_name.name, new HashMap<String, Map<String, List<String>>>());
-						} 
-						if (!ODLBrain.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).containsKey(serviceId)) {
-							ODLBrain.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).put(serviceId, new HashMap<String, List<String>>());
-							ODLBrain.multiRequestedService++;
-							System.out.println("Multi-requested services: " + Integer.toString(ODLBrain.multiRequestedService));
-						}
-						if (!ODLBrain.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).get(serviceId).containsKey(vnfId)) {
-							ODLBrain.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).get(serviceId).put(vnfId, vnfRequirements);
-							ODLBrain.mutilRequestedVNFs++;
-							System.out.println("Multi-requested VNFs: " + Integer.toString(ODLBrain.mutilRequestedVNFs));
-							//System.out.println(ODLBrain.serviceRequestedPerMaster);
-						}
-						if (!ODLBrain.vnfRequestedtoDeploy.containsKey(vnfId) && isMultiClusterDeployment.equals("True")) {
-							ODLBrain.vnfRequestedtoDeploy.put(vnfDeadline.concat(vnfId), vnfRequirements);
-							//ODLBrain.setVariableareValuesvnfRequestedtoDeploy(true);
-							ODLBrain.areValuesvnfRequestedtoDeploy = true;
-							//System.out.println(ODLBrain.vnfRequestedtoDeploy);
-							//System.out.println(ODLBrain.areValuesvnfRequestedtoDeploy);
-							//System.out.println(areValuesvnfRequestedtoDeploy);
-						}
-	
-						
-						if (!sample.DestinationNodeTp.equals("0") || !sample.DestinationNodeTp.equals("-1")) {
-							List<String> vnfRequirements = new ArrayList<String>();
-							vnfRequirements.add(0, Integer.toString(vnfCpuRequested));
-							vnfRequirements.add(1, Integer.toString(vnfRunningTime));
-							vnfRequirements.add(2, vnfDeadline);
-							vnfRequirements.add(3, vnfsInService);
-							vnfRequirements.add(4, serviceId);
-							vnfRequirements.add(5, "not deployed");
-	
-							if (!TutorialL2Forwarding.serviceRequestedPerMaster.containsKey(participantDataInfo.participant_name.name)) {
-								TutorialL2Forwarding.serviceRequestedPerMaster.put(participantDataInfo.participant_name.name, new HashMap<String, Map<String, List<String>>>());
-							} 
-							if (!TutorialL2Forwarding.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).containsKey(serviceId)) {
-								TutorialL2Forwarding.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).put(serviceId, new HashMap<String, List<String>>());
-							}
-							if (!TutorialL2Forwarding.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).get(serviceId).containsKey(vnfId)) {
-								TutorialL2Forwarding.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).get(serviceId).put(vnfId, vnfRequirements);
-							}
-							if (!TutorialL2Forwarding.vnfRequestedtoDeploy.containsKey(vnfId) && isMultiClusterDeployment.equals("True")) {
-								TutorialL2Forwarding.vnfRequestedtoDeploy.put(vnfDeadline.concat(vnfId), vnfRequirements);
-							}
-						}
-						
-					}
-	
-					// Reading information regarding the status of the last VNf deployed.
-					if (sample.Identificador.equals("VNF_Deployed")) {
-						PublicationBuiltinTopicData publicationData = new PublicationBuiltinTopicData();
-	
-						dataReader.get_matched_publication_data(publicationData, info.publication_handle);
-	
-						ParticipantBuiltinTopicData participantDataInfo = discoveredParticipants
-								.get(publicationData.participant_key.toString());
-						
-						System.out.println("Receiving service request from: " + participantDataInfo.participant_name.name);
-	
-						String vnfId = sample.NodeId;
-						String service = sample.TerminationPointId;
-						//System.out.println(vnfId);
-						//System.out.println(currentVNF);
-						//System.out.println(ODLBrain.currentVNF);
-						if (vnfId.equals(ODLBrain.currentVNF)) {
-							isCurrentVNFDeployed.set(true); 
-							ODLBrain.mutilDeployedVNFs++;
-							System.out.println("Multi-deployed VNFs: " + Integer.toString(ODLBrain.mutilDeployedVNFs));
-						}
-						List<String> vnfInformation = ODLBrain.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).get(service).get(vnfId);
-						if (vnfInformation.get(5).equals("not deployed")) {
-							vnfInformation.add(5, "deployed");
-							ODLBrain.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).get(service).put(vnfId, vnfInformation);
-						}
-						boolean serviceDeployed = ODLBrain.areAllVNFScheduled(participantDataInfo.participant_name.name, service);
-						if (serviceDeployed) {
-							ODLBrain.multiDeployedService++;
-							System.out.println("Multi-deployed Services: " + Integer.toString(ODLBrain.multiDeployedService));
-							float reward = ODLBrain.calculateReward();
-							ResAlloAlgo.setCurrentReward(reward);
-						}
-					}
-					
-					//System.setOut(originalOut);
-	
-				} catch (RETCODE_NO_DATA noData) {
-					// No more data to read
-					follow = false;
-				} catch (RETCODE_PRECONDITION_NOT_MET notMet) {
-					PrintStream fileErr = null;
-					try {
-						fileErr = new PrintStream(new FileOutputStream("./err.txt", true), true);
-					} catch (FileNotFoundException e) {
-						e.printStackTrace();
-					}
-					notMet.printStackTrace(fileErr);
-				} catch (RETCODE_BAD_PARAMETER bp) {
-					PrintStream fileErr = null;
-					try {
-						fileErr = new PrintStream(new FileOutputStream("./err.txt", true), true);
-					} catch (FileNotFoundException e) {
-						e.printStackTrace();
-					}
-					bp.printStackTrace(fileErr);
-				} catch (RETCODE_ERROR err) {
-					// An error occurred
-					PrintStream fileErr = null;
-					try {
-						fileErr = new PrintStream(new FileOutputStream("./err.txt", true), true);
-					} catch (FileNotFoundException e) {
-						e.printStackTrace();
-					}
-					err.printStackTrace(fileErr);
-				//} catch (FileNotFoundException e) {
-				//	e.printStackTrace();
-				} finally {
-				}
-			}
-		}
-	}
-	*/
 
 	/**
 	 * Class to implement a listener to access to the data participants in DDS domain.
@@ -1451,7 +1016,6 @@ public class ODLBrain extends DataReaderAdapter {
 					}
 				}
 			} catch (RETCODE_NO_DATA noData) {
-				// catch (RETCODE_NO_DATA | UnknownHostException noData) {
 				return;
 			} finally {
 			}
@@ -1656,7 +1220,7 @@ public class ODLBrain extends DataReaderAdapter {
 
 		NDArray cpu = manager.create(cpu_values);
 		NDArray soc = manager.create(soc_values);
-		//NDArray bw = new NDArray[indexes];
+
 		NDArray cpu_nor = NDArrays.div(cpu, MAX_CPU_NODES);
 		NDArray soc_nor = NDArrays.div(soc, MAX_SOC_NODES);
 
@@ -1717,7 +1281,7 @@ public class ODLBrain extends DataReaderAdapter {
 				List<String> vnf = ODLBrain.vnfRequestedtoDeploy.get(key);
 				request[0] = Float.parseFloat(vnf.get(0)) / MAX_CPU_NODES; // CPU demand of analyzed VNF
 				request[1] = Float.parseFloat(vnf.get(1)) / 100f; // Running time of analyzed VNF
-				request[2] = Float.parseFloat(vnf.get(2)) / 10000f; // Deadline of analyzed VNF
+				request[2] = Float.parseFloat(vnf.get(2)) / 100f; // Deadline of analyzed VNF
 				request[3] = Float.parseFloat(vnf.get(3)) / 10f;  // Pending functions of service request
 				ODLBrain.vnfRequestedtoDeploy.remove(key);
 			}
@@ -1753,21 +1317,9 @@ public class ODLBrain extends DataReaderAdapter {
 			mask[0] = 1f;
 			while (iteratorAvai.hasNext()) {
 				String next = iteratorAvai.next();
-				//Collection<String> avail = ODLBrain.nodesAvailabilityPerMaster.get(next).values();
-				//Iterator<String> avail_iter = avail.iterator();
 				Set<String> keysNode = ODLBrain.nodesAvailabilityPerMaster.get(next).keySet();
 				Iterator<String> iteratorNodes = keysNode.iterator();
-				/** 
-				while(avail_iter.hasNext()) {
-					String next1 = avail_iter.next();
-					if (next1.equals("True")) {
-						mask[i] = 1f;
-					} else {
-						mask[i] = 0f;
-					}
-					i++;
-				}
-				*/
+
 				while(iteratorNodes.hasNext()) {
 					String next1 = iteratorNodes.next();
 					String value = ODLBrain.nodesAvailabilityPerMaster.get(next).get(next1);
@@ -1790,11 +1342,8 @@ public class ODLBrain extends DataReaderAdapter {
 				}
 			}
 		}
-		//System.out.println(ODLBrain.nodesAvailabilityPerMaster);
 
 		NDArray availNodes = manager.create(mask);
-
-		//System.out.println(availNodes);
 
 		return availNodes;
 	}
@@ -1828,9 +1377,9 @@ public class ODLBrain extends DataReaderAdapter {
 			}
 		}
 		float aveCost = (usedNodes == 0) ? 0 : (totalCost / (float) usedNodes);
-		ODLBrain.resourceCost = aveCost; // totalCost
+		ODLBrain.resourceCost = aveCost; 
 
-		return aveCost; // totalCost
+		return aveCost; 
 	}
 
 	/**
@@ -1869,8 +1418,8 @@ public class ODLBrain extends DataReaderAdapter {
 
 		float reward = 0f;
 		float masterPenalization = 0.3f;
-		float overloadingNodePenalization = 0.2f; // 1f
-		float imbalancePenalization = 0.0f; // 1f
+		float overloadingNodePenalization = 0.2f; 
+		float imbalancePenalization = 0.0f; 
 
 		float lifetimeTerm = zeta * ODLBrain.getTotalLifeTime();
 		float deployedServiceTerm = xi * (((float) ODLBrain.multiDeployedService / (float) ODLBrain.multiRequestedService) + ((float) ODLBrain.multiDeployedVNFs / (float) ODLBrain.multiRequestedVNFs));
@@ -1906,8 +1455,7 @@ public class ODLBrain extends DataReaderAdapter {
 
 		while (iteratorKey.hasNext()) {
 			String master = iteratorKey.next();
-			//System.out.println(master);
-			//System.out.println(master.substring(master.lastIndexOf("e") + 1));
+
 			List<String> usedNodes = ODLBrain.usingNodes.get(master);
 
 			if (usedNodes.size() > 1) {
@@ -1929,18 +1477,12 @@ public class ODLBrain extends DataReaderAdapter {
 
 				if (usingMultipleNodes) {
 					if (currentObservation.singletonOrThrow().getFloat(index) > 0.03f) {
-						//ODLBrain.usingNodes.get(master).remove(node);
-						//if (ODLBrain.usingNodes.get(master).isEmpty()) {
-						//	ODLBrain.usingNodes.remove(master);
-						//}
+
 						indexNodes.add(index);
-					} //else {
-						//indexNodes.add(index);
-					//}
+					} 
 				}
 			}
 		}
-		//System.out.println(indexNodes);
 
 		if (usingMultipleNodes) {
 			List<Float> cpu = new ArrayList<Float>();
@@ -2034,8 +1576,7 @@ public class ODLBrain extends DataReaderAdapter {
 						   Integer.toString(ODLBrain.multiDeployedVNFs), 
 						   Integer.toString(ODLBrain.multiRejectedVNFs), 
 						   Integer.toString(ODLBrain.multiFailedVNFs),
-						   Integer.toString(ODLBrain.multiDiscardVNFs), 
-						   Integer.toString(ODLBrain.deadlineViolations)};				
+						   Integer.toString(ODLBrain.multiDiscardVNFs)};				
 
 		try {
 			writerResults.writeNext(result);
