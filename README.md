@@ -19,3 +19,6 @@ In case of running the **rlalgo package** independent of an SDN controller are n
 - Execute the application:
 
   mvn exec:java -Dexec.mainClass="com.rlresallo.ODLBrain"
+  
+ Please notice that you also need an rti_license in order to properly run the code. You can ask for it in:
+ <br/>[https://www.rti.com/free-trial](https://www.rti.com/free-trial)
