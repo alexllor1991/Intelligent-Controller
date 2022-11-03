@@ -51,7 +51,6 @@ public class EpsilonGreedy implements RlAgent {
      */
     @Override
     public NDList chooseAction(Environment env, boolean training, int nodes, int clusters, NDArray mask) {
-        //float epsilon = exploreRate.getNewValue(counter++);
         double epsilon = (double)final_epsilon + (double)(initial_epsilon - final_epsilon) * Math.exp((decay_epsilon*counter++)); 
         ResAlloAlgo.setEpsilon(epsilon);
         if (training && RandomUtils.random() < epsilon) {
@@ -60,25 +59,6 @@ public class EpsilonGreedy implements RlAgent {
             NDList action = env.getActionSpace().randomAction();
             System.out.println(Arrays.toString(action.toArray()));
 
-            // if (!(action.singletonOrThrow().getInt(4) == 1)) {
-            //     return action;
-            // } else {
-            //     while (action.singletonOrThrow().getInt(4) == 1) {
-            //         action = env.getActionSpace().randomAction();
-            //         System.out.println(Arrays.toString(action.toArray()));
-            //     }
-            //     return action;
-            // }
-
-            // if (!(action.singletonOrThrow().getInt(4) == 1) || !(action.singletonOrThrow().getInt(8) == 1)) {
-            //     return action;
-            // } else {
-            //     while (action.singletonOrThrow().getInt(4) == 1 || action.singletonOrThrow().getInt(8) == 1) {
-            //         action = env.getActionSpace().randomAction();
-            //         System.out.println(Arrays.toString(action.toArray()));
-            //     }
-            //     return action;
-            // }
             boolean nodeOK = checkNode(env, action, nodes, clusters);
 
             if (action.singletonOrThrow().getInt(4) != 1 && action.singletonOrThrow().getInt(8) != 1 && action.singletonOrThrow().getInt(12) != 1 && nodeOK) {
@@ -92,7 +72,6 @@ public class EpsilonGreedy implements RlAgent {
                 return action;
             }
 
-            //return env.getActionSpace().randomAction();
         } else return baseAgent.chooseAction(env, training, nodes, clusters, mask);
     }
 
@@ -126,7 +105,7 @@ public class EpsilonGreedy implements RlAgent {
             int iniIndex = (cluster - 1) * nodes;
 			int indexNode = iniIndex + node;
 			float capacity = env.getObservation().singletonOrThrow().getFloat(indexNode);
-			if (capacity < 0.875f) {//0.875f
+			if (capacity < 0.875f) {
 				nodeOK = true;
                 return nodeOK;
 			} else {
