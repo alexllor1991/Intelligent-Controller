@@ -11,7 +11,6 @@ import ai.djl.ndarray.NDArray;
 import ai.djl.nn.Activation;
 import ai.djl.nn.Blocks;
 import ai.djl.nn.SequentialBlock;
-//import ai.djl.nn.convolutional.Conv2d;
 import ai.djl.nn.core.Linear;
 import ai.djl.metric.Metrics;
 import ai.djl.training.DefaultTrainingConfig;
@@ -24,8 +23,7 @@ import ai.djl.training.loss.Loss;
 import ai.djl.training.optimizer.Adam;
 import ai.djl.training.tracker.LinearTracker;
 import ai.djl.training.tracker.LinearTracker.Builder;
-//import ai.djl.training.tracker.FactorTracker;
-//import ai.djl.training.tracker.FactorTracker.Builder;
+
 import ai.djl.training.tracker.Tracker;
 import ai.djl.nn.Parameter;
 import ai.djl.nn.ParameterList;
@@ -34,15 +32,13 @@ import com.rlresallo.agents.QAgent;
 import com.rlresallo.agents.RlAgent;
 import com.rlresallo.Environment;
 import com.rlresallo.Environment.Step;
-//import com.rlresallo.Arguments;
+
 import com.rlresallo.ResAlloAlgo;
-//import org.apache.commons.cli.ParseException;
-//import org.sdnhub.odl.tutorial.learningswitch.impl.TutorialL2Forwarding;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
-//import java.io.LineNumberReader;
-//import java.nio.charset.MalformedInputException;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -148,111 +144,6 @@ public final class TrainResAlloAlgo {
         for (Runnable runnable : runnables) {
             executorService.execute(runnable);
         }
-
-        /** 
-        DefaultTrainingConfig config = setupTrainingConfig();
-        try (Trainer trainer = model.newTrainer(config)) {
-            trainer.initialize(new Shape(batchSize, NUMBER_INPUTS)); // Initialize the model to be trained. 
-            trainer.notifyListeners(listener -> listener.onTrainingBegin(trainer)); // Listens to the beginning of training.
-
-            System.out.println("------------Initial model-----------");
-            System.out.println(trainer.getModel());
-            System.out.println(trainer.getModel().describeInput().toMap(false));
-            System.out.println(trainer.getModel().getBlock());
-            //System.out.println(trainer.getModel().getBlock().getParameters().toMap(false));
-
-            ParameterList params = trainer.getModel().getBlock().getParameters(); 
-
-            //NDArray Linear02_bias = params.get("02Linear_bias").getArray();
-            NDArray Linear02_weight = params.get("02Linear_weight").getArray();
-
-            //NDArray Linear04_bias = params.get("04Linear_bias").getArray();
-            NDArray Linear04_weight = params.get("04Linear_weight").getArray();
-
-            System.out.println("----02Linear_weight parameters-----");
-            System.out.println(Linear02_weight);
-
-            //System.out.println("----02Linear_bias parameters-----");
-            //System.out.println(Linear02_bias);
-
-            System.out.println("----04Linear_weight parameters-----");
-            System.out.println(Linear04_weight);
-
-            //System.out.println("----04Linear_bias parameters-----");
-            //System.out.println(Linear04_bias);
-            
-            //System.out.println(trainer.getModel().describeOutput().toMap(false));
-
-            Metrics metrics = new Metrics();
-            trainer.setMetrics(metrics);
-
-            //System.out.println("---Metrics---");
-            //System.out.println(trainer.getMetrics().getMetricNames());
-
-            System.out.println("---Evaluators---");
-            System.out.println(trainer.getEvaluators());
-
-            System.out.println("------------Initializing Q-agent-----------");
-            RlAgent agent = new QAgent(trainer, REWARD_DISCOUNT);
-            // Tracker represents a hyper-parameter that changes gradually through the training process.
-            Tracker exploreRate = LinearTracker.builder()  // A tracker that is updated by a constant factor.
-                                        .setBaseValue(INITIAL_EPSILON) // Sets the initial value after no steps.
-                                        .optSlope(-(INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE) // Sets the value of the linear slope.
-                                        .optMinValue(FINAL_EPSILON) // Sets the minimum value for a negative slope.
-                                        .build(); // Builds a LinearTracker block.
-            agent = new EpsilonGreedy(agent, exploreRate);
-
-            System.out.println("------------Waiting for input values-----------");
-            //while(true) {
-            //    if (ODLBrain.getVariableareValuesvnfRequestedtoDeploy()) {
-            //        break;
-            //    }
-            //}
-            //ODLBrain.areValuesvnfRequestedtoDeploy.set(false);
-            try {
-				Thread.sleep(10000);
-			} catch (InterruptedException ix) {
-				System.err.println("INTERRUPTED");
-			}
-
-            int numOfThreads = 2;
-            //List<Callable<Object>> callables = new ArrayList<>(numOfThreads); 
-            List<Runnable> runnables = new ArrayList<>(numOfThreads); 
-            //callables.add(new GeneratorCallable(env, agent, training));
-            runnables.add(new GeneratorRunnable(env, agent, training));
-            if(training) {
-                //callables.add(new TrainerCallable(model, agent));
-                runnables.add(new TrainerRunnable(model, agent));
-            }
-            ExecutorService executorService = Executors.newFixedThreadPool(numOfThreads);
-            // try {
-            //     try {
-            //         List<Future<Object>> futures = new ArrayList<>();
-            //         for (Callable<Object> callable : callables) {
-            //             futures.add(executorService.submit(callable));
-            //         }
-            //         for (Future<Object> future : futures) {
-            //             future.get();
-            //         }
-            //     } catch (InterruptedException | ExecutionException e) {
-            //         logger.error("", e);
-            //     }
-            // } finally {
-            //     executorService.shutdown();
-            // }
-            //try {
-            for (Runnable runnable : runnables) {
-                executorService.execute(runnable);
-            }
-            //} catch (InterruptedException | ExecutionException e) {
-            //    logger.error("", e);
-            //}
-            //} finally {
-            //    executorService.shutdown();
-            //}
-            
-        }
-        */
     }
 
     public void test(Model model, int noClusters, int noNodes) {
@@ -313,7 +204,6 @@ public final class TrainResAlloAlgo {
 
                 System.out.println("------------Initializing Q-agent-----------");
                 agent = new QAgent(trainer, REWARD_DISCOUNT, model, config, batchsize, NUMBER_INPUTS);
-                //agent = new QAgent(trainer, REWARD_DISCOUNT);
 
                 // Tracker represents a hyper-parameter that changes gradually through the training process.
                 Tracker exploreRate = LinearTracker.builder()  // A tracker that is updated by a constant factor.
@@ -322,11 +212,6 @@ public final class TrainResAlloAlgo {
                                             .optMinValue(FINAL_EPSILON) // Sets the minimum value for a negative slope.
                                             .build(); // Builds a LinearTracker block.
 
-                //Tracker exploreRateEpsilon = FactorTracker.builder()
-                //                            .setBaseValue(INITIAL_EPSILON)
-                //                            .optMinValue(FINAL_EPSILON)
-                //                            .setFactor()
-                //                            .build();
                 //agent = new EpsilonGreedy(agent, exploreRate);
                 agent = new EpsilonGreedy(agent, INITIAL_EPSILON, FINAL_EPSILON, DECAY_EPSILON);
 
@@ -337,7 +222,7 @@ public final class TrainResAlloAlgo {
                 while (ResAlloAlgo.trainStep < EXPLORE) {
                     Thread.sleep(0);
                     batchSteps = env.runEnvironment(agent, training);
-                    //System.out.println(ResAlloAlgo.envStep);
+ 
                     if (ResAlloAlgo.envStep > OBSERVE) {
                         //System.out.println("------------Enough experiences in replay buffer-----------");
                         agent.trainBatch(batchSteps);
@@ -409,7 +294,7 @@ public final class TrainResAlloAlgo {
 
             DefaultTrainingConfig config = setupTrainingConfig();
             try (Trainer trainer = model.newTrainer(config)) {
-                //RlAgent agent = new QAgent(trainer, REWARD_DISCOUNT);
+
                 System.out.println("------------Initial model-----------");
                 System.out.println(trainer.getModel());
                 System.out.println(trainer.getModel().describeInput().toMap(false));
@@ -452,110 +337,6 @@ public final class TrainResAlloAlgo {
             }
         }
     }
-
-    /** 
-    public static class TrainerCallable implements Callable<Object> {
-        private final RlAgent agent;
-        private final Model model;
-
-        public TrainerCallable(Model model, RlAgent agent) {
-            this.model = model;
-            this.agent = agent;
-        }
-
-        @Override
-        public Object call() throws Exception {
-            while (ResAlloAlgo.trainStep < EXPLORE) {
-                Thread.sleep(0);
-                if (ResAlloAlgo.envStep > OBSERVE) {
-                    System.out.println("------------Enough experiences in replay buffer-----------");
-                    this.agent.trainBatch(batchSteps);
-                    ResAlloAlgo.trainStep++;
-                    if (ResAlloAlgo.trainStep > 0 && ResAlloAlgo.trainStep % SAVE_EVERY_STEPS == 0) {
-                        model.save(Paths.get(MODEL_PATH), "dqn-" + ResAlloAlgo.trainStep);
-                    }
-                }
-            }
-            return null;
-        }
-    }
-    */
-
-    /** 
-    public static class TrainerRunnable implements Runnable {
-        private final RlAgent agent;
-        private final Model model;
-
-        public TrainerRunnable(Model model, RlAgent agent) {
-            this.model = model;
-            this.agent = agent;
-        }
-
-        @Override
-        public void run() {
-            try {
-                while (ResAlloAlgo.trainStep < EXPLORE) {
-                    Thread.sleep(0);
-                    //System.out.println(ResAlloAlgo.envStep);
-                    if (ResAlloAlgo.envStep > OBSERVE) {
-                        System.out.println("------------Enough experiences in replay buffer-----------");
-                        this.agent.trainBatch(batchSteps);
-                        ResAlloAlgo.trainStep++;
-                        if (ResAlloAlgo.trainStep > 0 && ResAlloAlgo.trainStep % SAVE_EVERY_STEPS == 0) {
-                            model.save(Paths.get(MODEL_PATH), "dqn-" + ResAlloAlgo.trainStep);
-                        }
-                    }
-                }
-            } catch (InterruptedException | IOException e) {
-                logger.error("", e);
-            }
-
-        }
-    }
-    */
-
-    /** 
-    private static class GeneratorCallable implements Callable<Object> {
-        private final ResAlloAlgo env;
-        private final RlAgent agent;
-        private final boolean training;
-
-        public GeneratorCallable(ResAlloAlgo env, RlAgent agent, boolean training) {
-            this.env = env;
-            this.agent = agent;
-            this.training = training;
-        }
-
-        @Override
-        public Object call() {
-            while (ResAlloAlgo.trainStep < EXPLORE) {
-                batchSteps = env.runEnvironment(agent, training);
-            }
-            return null;
-        }
-    }
-    */
-
-    /** 
-    private static class GeneratorRunnable implements Runnable {
-        private final ResAlloAlgo env;
-        private final RlAgent agent;
-        private final boolean training;
-
-        public GeneratorRunnable(ResAlloAlgo env, RlAgent agent, boolean training) {
-            this.env = env;
-            this.agent = agent;
-            this.training = training;
-        }
-
-        @Override
-        public void run() {
-            while (ResAlloAlgo.trainStep < EXPLORE) {
-                batchSteps = env.runEnvironment(agent, training);
-            }
-        }
-    }
-    */
 
     public static SequentialBlock getBlock() {
         /**
