@@ -1,5 +1,5 @@
 # Intelligent_Controller
-This repository implements the intelligent controller logic. It implements a DDS mechanism to exchange network information with other entities. Additionally, it implements a DQN algorithm to deploy VNFs in multiple-cluster domains.
+This repository implements the intelligent controller logic. It implements a DDS mechanism to exchange network information with other entities. Additionally, it implements a DQN algorithm to deploy VNFs in multi-cluster domains.
 
 The implemented package of a DQN algorithm uses Deep Java Library. It also incorporates the DDS implementation in case of using it without an SDN controller. Thus, it can communicate with other elements through the DDS.<br/>  [rlalgo/src/main/java/com/rlresallo/](rlalgo/src/main/java/com/rlresallo/)
 
