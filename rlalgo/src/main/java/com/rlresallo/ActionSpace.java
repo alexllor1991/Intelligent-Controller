@@ -15,7 +15,6 @@ public class ActionSpace extends ArrayList<NDList> {
      * @return a random action
      */
     public NDList randomAction() {
-        //System.out.println(Arrays.toString(get(RandomUtils.nextInt(size())).toArray()));
         return get(RandomUtils.nextInt(size()));
     }
 }
