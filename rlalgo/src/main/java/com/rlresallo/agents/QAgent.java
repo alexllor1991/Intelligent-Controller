@@ -134,7 +134,7 @@ public class QAgent implements RlAgent {
     public void trainBatch(Step[] batchSteps) {
         //epoch++;
 
-        if (ResAlloAlgo.trainStep > 0 && ResAlloAlgo.trainStep % TrainResAlloAlgo.SAVE_EVERY_STEPS == 0) {
+        if (ResAlloAlgo.trainStep > 0 && ResAlloAlgo.trainStep % TrainResAlloAlgo.SYNC_NETS_EVERY_STEPS == 0) {
             syncNets();
         }
 
@@ -162,7 +162,9 @@ public class QAgent implements RlAgent {
         NDList rewardInput = new NDList(NDArrays.stack(rewardBatch, 0));
 
         float ave_reward = rewardInput.singletonOrThrow().mean().getFloat();
+        float cum_reward = rewardInput.singletonOrThrow().sum().getFloat();
         ResAlloAlgo.setEpochReward(ave_reward);
+        ResAlloAlgo.setEpochCumReward(cum_reward);
 
         //GradientCollector provides a mechanism to collect gradients during training.
         try (GradientCollector collector = trainer.newGradientCollector()) { 

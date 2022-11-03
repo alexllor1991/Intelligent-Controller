@@ -100,9 +100,13 @@ public class ResAlloAlgo implements Environment {
     private int nodes;
 
     private static final String CSV_FILE_DATASET = "src/main/resources/model/Dataset.csv";
+    private static final String CSV_FILE_ENV = "src/main/resources/model/Env_results.csv";
     private static File file_dataset = null;
+    private static File file_env = null;
     private static FileWriter outputDataset = null;
+    private static FileWriter outputEnv = null;
     private static CSVWriter writerDataset = null;
+    private static CSVWriter writerEnv = null;
 
     /**
      * Constructs a {@link ResourceAllocationEnvironment} with a basic {@link LruReplayBUffer}
@@ -155,6 +159,7 @@ public class ResAlloAlgo implements Environment {
         }
 
         file_dataset = new File(CSV_FILE_DATASET);
+        file_env = new File(CSV_FILE_ENV);
 
         String[] headerDataset = {"Timestamp",
                                   "Preobservation",
@@ -162,11 +167,24 @@ public class ResAlloAlgo implements Environment {
                                   "Action",
                                   "Reward"};
 
+        String[] headerEnv = {"Timestamp",
+                              "Env_step",
+                              "Reward",
+                              "Reward_prepenalization",
+                              "Resource_cost_term",
+                              "Life_term",
+                              "Deployment_term",
+                              "Epsilon"};
+ 
         try {
             outputDataset = new FileWriter(file_dataset);
+            outputEnv = new FileWriter(file_env);
             writerDataset = new CSVWriter(outputDataset);
+            writerEnv = new CSVWriter(outputEnv);
             writerDataset.writeNext(headerDataset);
+            writerEnv.writeNext(headerEnv);
             writerDataset.flush();
+            writerEnv.flush();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -213,6 +231,8 @@ public class ResAlloAlgo implements Environment {
     private static boolean assumedVNFRejected = false;
     private static float currentReward = 0.0f;
     private static float averageRewardEpoch = 0.0f;
+    private static float totalRewardEpoch = 0.0f;
+    private static double epsilon = 0.0d;
     private String trainState = "observe";
     private static NDList extCurrentObservation;
 
@@ -361,6 +381,35 @@ public class ResAlloAlgo implements Environment {
                     if (ODLBrain.currentVNFDeployed() || ODLBrain.currentVNFRejected() || count == 60) {
                         if (count == 60) { //Assume current VNF has failed
                             assumedVNFRejected = true;
+
+                            ODLBrain.setFailedVNFs();
+
+                            int vnfServScheduled = 0;
+                            Set<String> keysVNfs = ODLBrain.serviceRequestedtoDeploy.get(serviceName).keySet();
+                            Iterator<String> iteratorKeys = keysVNfs.iterator();
+                            while(iteratorKeys.hasNext()) {
+                                String key = iteratorKeys.next();
+                                List<String> infoVNf = ODLBrain.serviceRequestedtoDeploy.get(serviceName).get(key);
+                                if (infoVNf.get(5).equals("deployed")) {
+                                    vnfServScheduled++;
+                                }
+                                String keyConcat = infoVNf.get(2).concat(key);
+                                if (ODLBrain.vnfRequestedtoDeploy.containsKey(keyConcat)) {
+                                    ODLBrain.vnfRequestedtoDeploy.remove(keyConcat);
+
+                                    ODLBrain.setDiscardedVNFs();
+                                    System.out.println("Removing key: " + keyConcat + " from vnfRequestedtoDeploy");
+                                }
+                            }
+                            
+                            if (!ODLBrain.servicesState.containsKey(serviceName)) {
+                                ODLBrain.servicesState.put(serviceName, "Rejected");
+                                int delta = keysVNfs.size() - vnfServScheduled;
+                                ODLBrain.setRejectedVNFs(delta);
+                                ODLBrain.setRejectedService();
+                            }
+
+                            ODLBrain.updateResults();
                             //int failedVNFs = ODLBrain.getFailedVNFs();
                             //ODLBrain.multiFailedVNFs.set(failedVNFs + 1);
                             //ODLBrain.multiFailedVNFs.getAndIncrement();
@@ -456,18 +505,60 @@ public class ResAlloAlgo implements Environment {
                                 Arrays.toString(action.singletonOrThrow().toArray()),
                                 Float.toString(step.getReward().getFloat())};
 
+            float rewardPre_penal = 0.0f;
+            if (step.getReward().getFloat() != 0.0f) {
+                rewardPre_penal = ODLBrain.getRewardPrepenal();
+            }
+
+            String[] env_result = {timestamp.toString(),
+                                   Integer.toString(envStep),
+                                   Float.toString(step.getReward().getFloat()),
+                                   Float.toString(rewardPre_penal),
+                                   Float.toString(ODLBrain.getResourceCost()),
+                                   Float.toString(ODLBrain.getLifetimeTerm()),
+                                   Float.toString(ODLBrain.getDeployedEventTerm()),
+                                   Double.toString(getEpsilon())};
+
             try {
                 writerDataset.writeNext(dataset);
+                writerEnv.writeNext(env_result);
                 writerDataset.flush();
+                writerEnv.flush();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+        } else {
+            float rewardPre_penal = 0.0f;
+            if (step.getReward().getFloat() != 0.0f) {
+                rewardPre_penal = ODLBrain.getRewardPrepenal();
+            }
+
+            LocalDateTime timestamp = LocalDateTime.now();
+
+            String[] env_result = {timestamp.toString(),
+                                   Integer.toString(envStep),
+                                   Float.toString(step.getReward().getFloat()),
+                                   Float.toString(rewardPre_penal),
+                                   Float.toString(ODLBrain.getResourceCost()),
+                                   Float.toString(ODLBrain.getLifetimeTerm()),
+                                   Float.toString(ODLBrain.getDeployedEventTerm()),
+                                   Double.toString(getEpsilon())};
+
+            try {
+                writerEnv.writeNext(env_result);
+                writerEnv.flush();
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
+
         logger.info("ENV_STEP " + envStep +
                 " / " + "TRAIN_STEP " + trainStep + 
                 " / " + getTrainState() +
                 " / " + "ACTION " + (Arrays.toString(action.singletonOrThrow().toArray())) +
-                " / " + "REWARD " + step.getReward().getFloat());
+                " / " + "REWARD " + step.getReward().getFloat() +
+                " / " + "EPSILON " + getEpsilon());
         System.out.println();
         if (envState == ENV_OVER) {
             restartEnv();
@@ -645,8 +736,24 @@ public class ResAlloAlgo implements Environment {
         ResAlloAlgo.averageRewardEpoch = averageReward;
     }
 
+    public static void setEpochCumReward(float cumReward) {
+        ResAlloAlgo.totalRewardEpoch = cumReward;
+    }
+
+    public static void setEpsilon(double epsilon) {
+        ResAlloAlgo.epsilon = epsilon;
+    }
+
     public static float getEpochReward() {
         return ResAlloAlgo.averageRewardEpoch;
+    }
+
+    public static float getEpochCumReward() {
+        return ResAlloAlgo.totalRewardEpoch;
+    }
+
+    public static double getEpsilon() {
+        return ResAlloAlgo.epsilon;
     }
 
     public static NDList getExtCurrentObservation() {

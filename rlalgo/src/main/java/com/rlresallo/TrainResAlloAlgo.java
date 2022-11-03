@@ -24,6 +24,8 @@ import ai.djl.training.loss.Loss;
 import ai.djl.training.optimizer.Adam;
 import ai.djl.training.tracker.LinearTracker;
 import ai.djl.training.tracker.LinearTracker.Builder;
+//import ai.djl.training.tracker.FactorTracker;
+//import ai.djl.training.tracker.FactorTracker.Builder;
 import ai.djl.training.tracker.Tracker;
 import ai.djl.nn.Parameter;
 import ai.djl.nn.ParameterList;
@@ -65,13 +67,15 @@ import java.time.LocalDateTime;
 public final class TrainResAlloAlgo {
     private static final Logger logger = LoggerFactory.getLogger(TrainResAlloAlgo.class);
 
-    public static final int OBSERVE = 80; // steps to observe before training
-    public static final int EXPLORE = 1000; // frames over which to anneal epsilon
+    public static final int OBSERVE = 25; // steps to observe before training 80
+    public static final int EXPLORE = 800; // frames over which to anneal epsilon
     public static final int SAVE_EVERY_STEPS = 100; // same model every x steps
+    public static final int SYNC_NETS_EVERY_STEPS = 50; // synchronize neural networks every x steps
     public static final int REPLAY_BUFFER_SIZE = 200; //50000; // number of previous transitions to remember
     public static final float REWARD_DISCOUNT = 0.9f; //decay rate of past observations
-    public static final float INITIAL_EPSILON = 0.01f;
-    public static final float FINAL_EPSILON = 0.001f;
+    public static final float INITIAL_EPSILON = 0.1f; // 0.3 0.5 0.7 0.9
+    public static final float FINAL_EPSILON = 0.01f; // 0.1f
+    public static final double DECAY_EPSILON = -0.002d;
     public static final String PARAMS_PREFIX = "dqn-800-0000.params";
     public static final String MODEL_PATH = "src/main/resources/model";
     public static int NUMBER_INPUTS; // number of inputs in the neural network
@@ -93,10 +97,13 @@ public final class TrainResAlloAlgo {
         file_training_results = new File(CSV_FILE_TRAINING_RESULTS);
 
         String[] headerTraining_results = {"Timestamp",
+                                           "Env_Steps",
                                            "Epoch",
                                            "L2Loss",
                                            "Accuracy",
-                                           "Ave_Reward"};
+                                           "Ave_Reward",
+                                           "Cum_Reward",
+                                           "Epsilon"};
 
         try {
             outputTraining_results = new FileWriter(file_training_results);
@@ -248,15 +255,15 @@ public final class TrainResAlloAlgo {
         */
     }
 
-    public void test(Model model) {
-        ResAlloAlgo env = new ResAlloAlgo(NDManager.newBaseManager(), 1, 1, 1, 1);
-        DefaultTrainingConfig config = setupTrainingConfig();
-        try (Trainer trainer = model.newTrainer(config)) {
-            //RlAgent agent = new QAgent(trainer, REWARD_DISCOUNT);
-            RlAgent agent = new QAgent(trainer, REWARD_DISCOUNT, model, config, 1, NUMBER_INPUTS);
-            while (true) {
-                env.runEnvironment(agent, false);
-            }
+    public void test(Model model, int noClusters, int noNodes) {
+        ResAlloAlgo env = new ResAlloAlgo(NDManager.newBaseManager(), 1, 1, noClusters, noNodes);
+        
+        int numOfThreads = 1;
+        List<Runnable> runnables = new ArrayList<>(numOfThreads);
+        runnables.add(new TesterGeneratorRunnable(model, env));
+        ExecutorService executorService = Executors.newFixedThreadPool(numOfThreads);
+        for (Runnable runnable : runnables) {
+            executorService.execute(runnable);
         }
     }
 
@@ -311,10 +318,17 @@ public final class TrainResAlloAlgo {
                 // Tracker represents a hyper-parameter that changes gradually through the training process.
                 Tracker exploreRate = LinearTracker.builder()  // A tracker that is updated by a constant factor.
                                             .setBaseValue(INITIAL_EPSILON) // Sets the initial value after no steps.
-                                            .optSlope(-(INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE) // Sets the value of the linear slope.
+                                            .optSlope(-INITIAL_EPSILON / EXPLORE) // Sets the value of the linear slope. //- FINAL_EPSILON
                                             .optMinValue(FINAL_EPSILON) // Sets the minimum value for a negative slope.
                                             .build(); // Builds a LinearTracker block.
-                agent = new EpsilonGreedy(agent, exploreRate);
+
+                //Tracker exploreRateEpsilon = FactorTracker.builder()
+                //                            .setBaseValue(INITIAL_EPSILON)
+                //                            .optMinValue(FINAL_EPSILON)
+                //                            .setFactor()
+                //                            .build();
+                //agent = new EpsilonGreedy(agent, exploreRate);
+                agent = new EpsilonGreedy(agent, INITIAL_EPSILON, FINAL_EPSILON, DECAY_EPSILON);
 
                 System.out.println("------------Waiting for input values-----------");
             
@@ -354,10 +368,13 @@ public final class TrainResAlloAlgo {
 
                         LocalDateTime timestamp = LocalDateTime.now();
                         String[] trainingResults = {timestamp.toString(),
+                                                    Integer.toString(ResAlloAlgo.envStep),
                                                     Integer.toString(ResAlloAlgo.trainStep),
                                                     Double.toString(l2loss_epoch),
                                                     Double.toString(accuracy_epoch),
-                                                    Float.toString(ResAlloAlgo.getEpochReward())};
+                                                    Float.toString(ResAlloAlgo.getEpochReward()),
+                                                    Float.toString(ResAlloAlgo.getEpochCumReward()),
+                                                    Double.toString(ResAlloAlgo.getEpsilon())};
 
                         try {
                             writerTraining_results.writeNext(trainingResults);
@@ -372,6 +389,65 @@ public final class TrainResAlloAlgo {
                     }
                 }
             } catch (InterruptedException | IOException e) {
+                logger.error("", e);
+            }
+        }
+    }
+
+    public static class TesterGeneratorRunnable implements Runnable {
+        private Model model;
+        private ResAlloAlgo env;
+        private RlAgent agent;
+
+        public TesterGeneratorRunnable(Model model, ResAlloAlgo env) {
+            this.model = model;
+            this.env = env;
+        }
+
+        @Override
+        public void run() {
+
+            DefaultTrainingConfig config = setupTrainingConfig();
+            try (Trainer trainer = model.newTrainer(config)) {
+                //RlAgent agent = new QAgent(trainer, REWARD_DISCOUNT);
+                System.out.println("------------Initial model-----------");
+                System.out.println(trainer.getModel());
+                System.out.println(trainer.getModel().describeInput().toMap(false));
+                System.out.println(trainer.getModel().getBlock());
+
+                ParameterList params = trainer.getModel().getBlock().getParameters(); 
+
+                NDArray Linear02_weight = params.get("02Linear_weight").getArray();
+                NDArray Linear04_weight = params.get("04Linear_weight").getArray();
+
+                System.out.println("----02Linear_weight parameters-----");
+                System.out.println(Linear02_weight);
+
+                System.out.println("----04Linear_weight parameters-----");
+                System.out.println(Linear04_weight);
+
+                Metrics metrics = new Metrics();
+                trainer.setMetrics(metrics);
+
+                System.out.println("---Evaluators---");
+                System.out.println(trainer.getEvaluators());
+
+                System.out.println("------------Initializing Q-agent-----------");
+                agent = new QAgent(trainer, REWARD_DISCOUNT, model, config, 1, NUMBER_INPUTS);
+    
+                System.out.println("------------Waiting for input values-----------");
+                Thread.sleep(10000);
+                long startingTime = System.nanoTime();
+    
+                while (ODLBrain.vnfRequestedtoDeploy.size() > 0) {
+                    env.runEnvironment(agent, false);
+                }
+                if (ODLBrain.vnfRequestedtoDeploy.size() == 0) {
+                    long finishingTime = System.nanoTime();
+                    long processingTime = finishingTime - startingTime;
+                    System.out.println("****Processing Time******" + Long.toString(processingTime));
+                }
+            } catch (InterruptedException e) {
                 logger.error("", e);
             }
         }

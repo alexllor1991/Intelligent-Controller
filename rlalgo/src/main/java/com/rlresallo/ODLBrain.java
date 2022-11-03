@@ -15,8 +15,13 @@ import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.io.IOException;
@@ -76,9 +81,10 @@ import java.time.LocalDateTime;
 public class ODLBrain extends DataReaderAdapter {
 
     private static final Logger logger = LoggerFactory.getLogger(ODLBrain.class);
+	public static final String algorithm = "DQN"; // DQN GSOCCS Least_loaded Sequential 
     public static final float MAX_CPU_NODES = 4000f;
 	private static final float MAX_SOC_NODES = 100f;
-	private static final float usedResourcesCost = 0.2f;
+	private static final float usedResourcesCost = 1f; // 0.2
     private static final float zeta = 0.2f; // adjustable positive weight lifetime term
 	private static final float xi = 0.5f; // adjustable positive weight deployed service term   0.4f
 	private static final float phi = 0.3f; // adjustable positive weight used resource cost term 0.2f
@@ -92,6 +98,7 @@ public class ODLBrain extends DataReaderAdapter {
 	//public static AtomicInteger multiRejectedVNFs = new AtomicInteger();
 	public static int deadlineViolations = 0;
 	public static int multiFailedVNFs = 0;
+	public static int multiDiscardVNFs = 0;
 	//public static AtomicInteger multiFailedVNFs = new AtomicInteger(); 
 	private static String currentVNF = "";
 	private static String currentService = "";
@@ -104,6 +111,10 @@ public class ODLBrain extends DataReaderAdapter {
 	private static int cluster = 0;
 	private static int numberNodes = 0;
 	private static int bypassReward = 0;
+	private static float resourceCost = 0.0f;
+	private static float lifeTime = 0.0f;
+	private static float deployedEvent = 0.0f;
+	private static float rewardPrePenal = 0.0f;
 
     private static Map<String, List<String>> ipLocalandPublicPerController = new HashMap<String, List<String>>();
 
@@ -115,6 +126,7 @@ public class ODLBrain extends DataReaderAdapter {
 	public static ConcurrentSkipListMap<String, Map<String, List<String>>> serviceRequestedtoDeploy;
 	public static ConcurrentSkipListMap<String, List<String>> vnfRequestedtoDeploy;
 	public static ConcurrentSkipListMap<String, List<String>> usingNodes;
+	public static ConcurrentSkipListMap<String, String> servicesState;
 
     private static ConcurrentSkipListMap<String, ParticipantBuiltinTopicData> discoveredParticipants;
 	private static ConcurrentSkipListMap<String, ParticipantBuiltinTopicData> failureParticipants;
@@ -174,7 +186,7 @@ public class ODLBrain extends DataReaderAdapter {
 		int noNodes = 4;
 		numberNodes = noNodes;
 		int batchSize = 64; //32
-		boolean preTrained = false;
+		boolean preTrained = true;
 		boolean testing = false;
 
 		file_results = new File(CSV_FILE_RESULTS);
@@ -188,6 +200,7 @@ public class ODLBrain extends DataReaderAdapter {
 								  "Scheduled_VNFs", 
 								  "Rejected_VNFs", 
 								  "Failed_VNFs", 
+								  "Discarded_VNFs",
 								  "Deadline_violations"};
 
 		String[] headerUsage = {"Timestamp",
@@ -212,7 +225,9 @@ public class ODLBrain extends DataReaderAdapter {
 			e.printStackTrace();
 		}
 
-        trainAlgo = new TrainResAlloAlgo(noClusters, noNodes, batchSize, preTrained, testing);
+		if (algorithm.equals("DQN")) {
+			trainAlgo = new TrainResAlloAlgo(noClusters, noNodes, batchSize, preTrained, testing);
+		} 
 
         discoveredParticipants = new ConcurrentSkipListMap<String, ParticipantBuiltinTopicData>();
 		failureParticipants = new ConcurrentSkipListMap<String, ParticipantBuiltinTopicData>();
@@ -228,6 +243,7 @@ public class ODLBrain extends DataReaderAdapter {
 		isCurrentVNFRejected = new AtomicBoolean(false);
 		areValuesvnfRequestedtoDeploy = new AtomicBoolean(false);
 		usingNodes = new ConcurrentSkipListMap<String, List<String>>();
+		servicesState = new ConcurrentSkipListMap<String, String>();
 
         // Creating DDS participant, Topic, DataWriter and DataReader
 		try {
@@ -256,7 +272,7 @@ public class ODLBrain extends DataReaderAdapter {
 			pQos.discovery.initial_peers.add("239.255.0.1");
 			pQos.discovery.initial_peers.add("8@builtin.udpv4://127.0.0.1");
 			pQos.discovery.initial_peers.add("8@builtin.udpv4://147.83.118.141");
-			pQos.discovery.initial_peers.add("8@builtin.udpv4://172.16.10.49");
+			pQos.discovery.initial_peers.add("8@builtin.udpv4://172.16.10.48");
 			pQos.discovery.initial_peers.add("8@builtin.udpv4://163.117.140.219");
 			pQos.discovery.initial_peers.add("8@builtin.udpv4://172.16.2.230");
 			pQos.discovery.initial_peers.add("8@builtin.udpv4://172.16.2.152");
@@ -278,7 +294,7 @@ public class ODLBrain extends DataReaderAdapter {
 			com.rti.ndds.transport.TransportSupport
 					.get_builtin_transport_property(participant,
 							transportProperty);
-			transportProperty.public_address = "172.16.10.47"; 
+			transportProperty.public_address = "172.16.10.49"; 
 			transportProperty.message_size_max = 65530;
 			transportProperty.recv_socket_buffer_size = 1048576;
 			transportProperty.send_socket_buffer_size = 65530;
@@ -527,19 +543,31 @@ public class ODLBrain extends DataReaderAdapter {
 
 		final long receivedata = 1;
 
-		try {
-			Model model = trainAlgo.createOrLoadModel(preTrained);
-			if (testing) {
-				trainAlgo.test(model);
-			} else {
-				System.out.println("------------Training model-----------");
-				trainAlgo.train(batchSize, preTrained, testing, model, noClusters, noNodes);
+		if (algorithm.equals("DQN")) {
+			try {
+				Model model = trainAlgo.createOrLoadModel(preTrained);
+				if (testing) {
+					System.out.println("------------Testing model-----------");
+					trainAlgo.test(model,noClusters, noNodes);
+				} else {
+					System.out.println("------------Training model-----------");
+					trainAlgo.train(batchSize, preTrained, testing, model, noClusters, noNodes);
+				}
+			} catch (IOException io) {
+				System.out.println(io);
+			} catch (MalformedModelException me) {
+				System.out.println(me);
 			}
-		} catch (IOException io) {
-			System.out.println(io);
-		} catch (MalformedModelException me) {
-			System.out.println(me);
-		}
+
+		} else {
+			int numOfThreads = 1;
+			List<Runnable> runnables = new ArrayList<>(numOfThreads);
+			runnables.add(new OtherAlgorithmsGeneratorRunnable(noClusters, noNodes, algorithm));
+			ExecutorService executorService = Executors.newFixedThreadPool(numOfThreads);
+			for (Runnable runnable : runnables) {
+				executorService.execute(runnable);
+			}
+		} 
 		
 		for (int count = 0; (sampleCount == 0) || (count < sampleCount); ++count) {
 
@@ -585,6 +613,7 @@ public class ODLBrain extends DataReaderAdapter {
 		}
 		
     }
+
 	public static boolean getVariableareValuesvnfRequestedtoDeploy(){
 		boolean value = areValuesvnfRequestedtoDeploy.get();
 		return value;
@@ -759,6 +788,8 @@ public class ODLBrain extends DataReaderAdapter {
 					} 
 					if (!ODLBrain.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).containsKey(serviceId)) {
 						ODLBrain.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).put(serviceId, new HashMap<String, List<String>>());
+					//}
+					//if (!ODLBrain.serviceRequestedtoDeploy.containsKey(serviceId)) {	
 						ODLBrain.serviceRequestedtoDeploy.put(serviceId, new HashMap<String, List<String>>());
 						ODLBrain.multiRequestedService++;
 						//System.out.println("Multi-requested services: " + Integer.toString(ODLBrain.multiRequestedService));
@@ -772,6 +803,7 @@ public class ODLBrain extends DataReaderAdapter {
 										   Integer.toString(ODLBrain.multiDeployedVNFs), 
 										   Integer.toString(ODLBrain.multiRejectedVNFs), 
 										   Integer.toString(ODLBrain.multiFailedVNFs), 
+										   Integer.toString(ODLBrain.multiDiscardVNFs),
 										   Integer.toString(ODLBrain.deadlineViolations)};				
 	
 						try {
@@ -784,6 +816,8 @@ public class ODLBrain extends DataReaderAdapter {
 					}
 					if (!ODLBrain.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).get(serviceId).containsKey(vnfId)) {
 						ODLBrain.serviceRequestedPerMaster.get(participantDataInfo.participant_name.name).get(serviceId).put(vnfId, vnfRequirements);
+					//}
+					//if (!ODLBrain.serviceRequestedtoDeploy.get(serviceId).containsKey(vnfId)) {	
 						ODLBrain.serviceRequestedtoDeploy.get(serviceId).put(vnfId, vnfRequirements);
 						ODLBrain.multiRequestedVNFs++;
 						//System.out.println("Multi-requested VNFs: " + Integer.toString(ODLBrain.multiRequestedVNFs));
@@ -798,6 +832,7 @@ public class ODLBrain extends DataReaderAdapter {
 										   Integer.toString(ODLBrain.multiDeployedVNFs), 
 										   Integer.toString(ODLBrain.multiRejectedVNFs), 
 										   Integer.toString(ODLBrain.multiFailedVNFs), 
+										   Integer.toString(ODLBrain.multiDiscardVNFs),
 										   Integer.toString(ODLBrain.deadlineViolations)};				
 
 						try {
@@ -868,6 +903,7 @@ public class ODLBrain extends DataReaderAdapter {
 										   Integer.toString(ODLBrain.multiDeployedVNFs), 
 										   Integer.toString(ODLBrain.multiRejectedVNFs), 
 										   Integer.toString(ODLBrain.multiFailedVNFs), 
+										   Integer.toString(ODLBrain.multiDiscardVNFs),
 										   Integer.toString(ODLBrain.deadlineViolations)};				
 	
 						try {
@@ -885,6 +921,9 @@ public class ODLBrain extends DataReaderAdapter {
 					boolean serviceDeployed = ODLBrain.areAllVNFScheduled("kubernetes-control-plane1", service);
 					if (serviceDeployed) {
 						ODLBrain.multiDeployedService++;
+						if (!ODLBrain.servicesState.containsKey(service)) {
+							ODLBrain.servicesState.put(service, "Deployed");
+						}
 						//System.out.println("Multi-deployed Services: " + Integer.toString(ODLBrain.multiDeployedService));
 
 						LocalDateTime timestamp = LocalDateTime.now();
@@ -896,6 +935,7 @@ public class ODLBrain extends DataReaderAdapter {
 										   Integer.toString(ODLBrain.multiDeployedVNFs), 
 										   Integer.toString(ODLBrain.multiRejectedVNFs), 
 										   Integer.toString(ODLBrain.multiFailedVNFs), 
+										   Integer.toString(ODLBrain.multiDiscardVNFs),
 										   Integer.toString(ODLBrain.deadlineViolations)};				
 	
 						try {
@@ -905,13 +945,23 @@ public class ODLBrain extends DataReaderAdapter {
 							e.printStackTrace();
 						}
 
-						float reward = ODLBrain.calculateReward();
-						ResAlloAlgo.setCurrentReward(reward);
-						isCurrentVNFDeployed.set(true); 
+						if (algorithm.equals("DQN")) {
+							float reward = ODLBrain.calculateReward();
+							ResAlloAlgo.setCurrentReward(reward);
+							isCurrentVNFDeployed.set(true); 
+						} else {
+							isCurrentVNFDeployed.set(true);
+						}
+
 					} else {
-						float reward = ODLBrain.calculateReward();
-						ResAlloAlgo.setCurrentReward(reward);
-						isCurrentVNFDeployed.set(true); 
+
+						if (algorithm.equals("DQN")) {
+							float reward = ODLBrain.calculateReward();
+							ResAlloAlgo.setCurrentReward(reward);
+							isCurrentVNFDeployed.set(true); 
+						} else {
+							isCurrentVNFDeployed.set(true);
+						}
 					}
 				}
 
@@ -946,12 +996,17 @@ public class ODLBrain extends DataReaderAdapter {
 							String keyConcat = infoVNf.get(2).concat(key);
 							if (ODLBrain.vnfRequestedtoDeploy.containsKey(keyConcat)) {
 								ODLBrain.vnfRequestedtoDeploy.remove(keyConcat);
+								ODLBrain.multiDiscardVNFs++;
 								System.out.println("Removing key: " + keyConcat + " from vnfRequestedtoDeploy");
 							}
 						}
-						int delta = keysVNfs.size() - vnfServScheduled;
-						ODLBrain.multiRejectedVNFs = ODLBrain.multiRejectedVNFs + delta;
-						ODLBrain.multiRejectedService++;
+						
+						if (!ODLBrain.servicesState.containsKey(ODLBrain.currentService)) {
+							ODLBrain.servicesState.put(ODLBrain.currentService, "Rejected");
+							int delta = keysVNfs.size() - vnfServScheduled;
+							ODLBrain.multiRejectedVNFs = ODLBrain.multiRejectedVNFs + delta;
+							ODLBrain.multiRejectedService++;
+						}
 
 						LocalDateTime timestamp = LocalDateTime.now();
 						String[] result = {timestamp.toString(), 		//timestamp
@@ -961,7 +1016,8 @@ public class ODLBrain extends DataReaderAdapter {
 										   Integer.toString(ODLBrain.multiRequestedVNFs), 
 										   Integer.toString(ODLBrain.multiDeployedVNFs), 
 										   Integer.toString(ODLBrain.multiRejectedVNFs), 
-										   Integer.toString(ODLBrain.multiFailedVNFs), 
+										   Integer.toString(ODLBrain.multiFailedVNFs),
+										   Integer.toString(ODLBrain.multiDiscardVNFs), 
 										   Integer.toString(ODLBrain.deadlineViolations)};				
 	
 						try {
@@ -971,8 +1027,14 @@ public class ODLBrain extends DataReaderAdapter {
 							e.printStackTrace();
 						}
 					}
-					ResAlloAlgo.setCurrentReward(0f);
-					isCurrentVNFRejected.set(true); 
+
+					if (algorithm.equals("DQN")) {
+						ResAlloAlgo.setCurrentReward(0f);
+						isCurrentVNFRejected.set(true); 
+					} else {
+						isCurrentVNFRejected.set(true); 
+					}
+
 				}
 
 			} catch (RETCODE_NO_DATA noData) {
@@ -1514,7 +1576,7 @@ public class ODLBrain extends DataReaderAdapter {
 	public static void notifyVNFDeployment(int cluster, int node, String vnfName, float cpuRequested, String deploymentType, String serviceName) {
 		topologia VNF = new topologia();
 		VNF.Identificador = "kubernetes-control-plane" + Integer.toString(cluster);
-		if (ODLBrain.nodesCPUPerMaster.get(VNF.Identificador).size() == node) {
+		if (ODLBrain.nodesCPUPerMaster.get(VNF.Identificador).size() == node || node == 0) {
 			VNF.NodeId = "kubernetes-control-plane";
 		} else {
 			VNF.NodeId = "kubernetes-worker" + Integer.toString(node);
@@ -1748,6 +1810,7 @@ public class ODLBrain extends DataReaderAdapter {
 
 		NavigableSet<String> keys = ODLBrain.anyVNFInNodesPerMaster.keySet();
 		Iterator<String> iter = keys.iterator();
+		int usedNodes = 0;
 		while (iter.hasNext()) {
 			String next = iter.next();
 			Set<String> keysNodes = ODLBrain.anyVNFInNodesPerMaster.get(next).keySet();
@@ -1755,16 +1818,19 @@ public class ODLBrain extends DataReaderAdapter {
 			while (iterNodes.hasNext()) {
 				String nextNode = iterNodes.next();
 				if (ODLBrain.anyVNFInNodesPerMaster.get(next).get(nextNode).equals("1")) {
-					float remaingCPU = ODLBrain.nodesCPUPerMaster.get(next).get(nextNode);
-					float cost = usedResourcesCost * remaingCPU / MAX_CPU_NODES;
+					float usedCPU = ODLBrain.nodesCPUPerMaster.get(next).get(nextNode);
+					float cost = usedResourcesCost * usedCPU / MAX_CPU_NODES;
 					totalCost = totalCost + cost;
+					usedNodes++;
 				} else {
 					totalCost = totalCost + 0f;
 				}
 			}
 		}
+		float aveCost = (usedNodes == 0) ? 0 : (totalCost / (float) usedNodes);
+		ODLBrain.resourceCost = aveCost; // totalCost
 
-		return totalCost;
+		return aveCost; // totalCost
 	}
 
 	/**
@@ -1786,8 +1852,9 @@ public class ODLBrain extends DataReaderAdapter {
 				totalLifetime = totalLifetime + nextSOC;
 			}
 		}
+		ODLBrain.lifeTime = totalLifetime / 12.0f;
 
-		return totalLifetime;
+		return totalLifetime / 12.0f;
 	}
 
 	/**
@@ -1801,15 +1868,19 @@ public class ODLBrain extends DataReaderAdapter {
 	public static float calculateReward() {
 
 		float reward = 0f;
-		float masterPenalization = 0.7f;
-		float overloadingNodePenalization = 1f;
-		float imbalancePenalization = 1f;
+		float masterPenalization = 0.3f;
+		float overloadingNodePenalization = 0.2f; // 1f
+		float imbalancePenalization = 0.0f; // 1f
 
 		float lifetimeTerm = zeta * ODLBrain.getTotalLifeTime();
-		float deployedServiceTerm = xi * ODLBrain.multiDeployedService / ODLBrain.multiRequestedService;
+		float deployedServiceTerm = xi * (((float) ODLBrain.multiDeployedService / (float) ODLBrain.multiRequestedService) + ((float) ODLBrain.multiDeployedVNFs / (float) ODLBrain.multiRequestedVNFs));
 		float resourceCostTerm = phi * ODLBrain.getTotalCostUsedResources();
 
+		ODLBrain.deployedEvent = (((float) ODLBrain.multiDeployedService / (float) ODLBrain.multiRequestedService) + ((float) ODLBrain.multiDeployedVNFs / (float) ODLBrain.multiRequestedVNFs));
+
 		reward = lifetimeTerm + deployedServiceTerm - resourceCostTerm;
+
+		ODLBrain.rewardPrePenal = reward;
 
 		NDList currentObservation = ResAlloAlgo.getExtCurrentObservation();
 
@@ -1857,14 +1928,15 @@ public class ODLBrain extends DataReaderAdapter {
 				}
 
 				if (usingMultipleNodes) {
-					if (currentObservation.singletonOrThrow().getFloat(index) < 0.03f) {
-						ODLBrain.usingNodes.get(master).remove(node);
-						if (ODLBrain.usingNodes.get(master).isEmpty()) {
-							ODLBrain.usingNodes.remove(master);
-						}
-					} else {
+					if (currentObservation.singletonOrThrow().getFloat(index) > 0.03f) {
+						//ODLBrain.usingNodes.get(master).remove(node);
+						//if (ODLBrain.usingNodes.get(master).isEmpty()) {
+						//	ODLBrain.usingNodes.remove(master);
+						//}
 						indexNodes.add(index);
-					}
+					} //else {
+						//indexNodes.add(index);
+					//}
 				}
 			}
 		}
@@ -1894,6 +1966,420 @@ public class ODLBrain extends DataReaderAdapter {
 		} 
 
 		return reward;
+	}
+
+	/**
+	 * Method used by the DQN algorithm to get the resource cost of current deployment
+	 * 
+	 * @return   resource cost of the current deployment
+	 */
+	public static Float getResourceCost() {
+		return ODLBrain.resourceCost;
+	}
+
+	/**
+	 * Method used by the DQN algorithm to get the lifetime term of current deployment
+	 * 
+	 * @return   lifetime term of the current deployment
+	 */
+	public static Float getLifetimeTerm() {
+		return ODLBrain.lifeTime;
+	}
+
+	/**
+	 * Method used by the DQN algorithm to get the deployedEvent term of current deployment
+	 * 
+	 * @return   deployedEvent term of the current deployment
+	 */
+	public static Float getDeployedEventTerm() {
+		return ODLBrain.deployedEvent;
+	}
+
+	public static void setDeployedEvent() {
+		ODLBrain.deployedEvent = (((float) ODLBrain.multiDeployedService / (float) ODLBrain.multiRequestedService) + ((float) ODLBrain.multiDeployedVNFs / (float) ODLBrain.multiRequestedVNFs));
+	}
+
+	/**
+	 * Method used by the DQN algorithm to get the reward prepenalization of current deployment
+	 * 
+	 * @return   reward prepenalization of the current deployment
+	 */
+	public static Float getRewardPrepenal() {
+		return ODLBrain.rewardPrePenal;
+	}
+
+	public static void setRejectedVNFs(int vnfs) {
+		ODLBrain.multiRejectedVNFs = ODLBrain.multiRejectedVNFs + vnfs;
+	}
+
+	public static void setDiscardedVNFs() {
+		ODLBrain.multiDiscardVNFs++;
+	}
+
+	public static void setFailedVNFs() {
+		ODLBrain.multiFailedVNFs++;
+	}
+
+	public static void setRejectedService() {
+		ODLBrain.multiRejectedService++;
+	}
+
+	public static void updateResults() {
+		LocalDateTime timestamp = LocalDateTime.now();
+		String[] result = {timestamp.toString(), 		//timestamp
+						   Integer.toString(ODLBrain.multiRequestedService), 
+						   Integer.toString(ODLBrain.multiDeployedService), 
+						   Integer.toString(ODLBrain.multiRejectedService), 
+						   Integer.toString(ODLBrain.multiRequestedVNFs), 
+						   Integer.toString(ODLBrain.multiDeployedVNFs), 
+						   Integer.toString(ODLBrain.multiRejectedVNFs), 
+						   Integer.toString(ODLBrain.multiFailedVNFs),
+						   Integer.toString(ODLBrain.multiDiscardVNFs), 
+						   Integer.toString(ODLBrain.deadlineViolations)};				
+
+		try {
+			writerResults.writeNext(result);
+			writerResults.flush();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public static class OtherAlgorithmsGeneratorRunnable implements Runnable {
+		private int clusters;
+		private int nodes;
+		private String algo;
+		private boolean lastVNFRejected;
+		private int lastNode;
+		private int lastCluster;
+		private int envStep;
+		private String CSV_FILE_ENV;
+		private File file_env;
+		private FileWriter outputEnv;
+		private CSVWriter writerEnv;
+
+		public OtherAlgorithmsGeneratorRunnable(int clusters, int nodes, String algo) {
+			this.clusters = clusters;
+			this.nodes = nodes;
+			this.algo = algo;
+			lastVNFRejected = true;
+			lastNode = 0;
+			lastCluster = 0;
+			envStep = 0;
+			CSV_FILE_ENV = "src/main/resources/model/Env_results.csv";
+			file_env = null;
+			outputEnv = null;
+			writerEnv = null;
+		}
+
+		@Override
+        public void run() {
+
+			String[] headerEnv = {"Timestamp",
+								"Env_step",
+								"Reward",
+								"Reward_prepenalization",
+								"Resource_cost_term",
+								"Life_term",
+								"Deployment_term",
+								"Epsilon"};
+
+			try {
+				file_env = new File(CSV_FILE_ENV);		
+				outputEnv = new FileWriter(file_env);
+				writerEnv = new CSVWriter(outputEnv);
+				writerEnv.writeNext(headerEnv);
+				writerEnv.flush();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			
+			try {
+				System.out.println("------------Waiting for input values-----------");
+				Thread.sleep(10000);
+				long startingTime = System.nanoTime();
+	
+				while (ODLBrain.vnfRequestedtoDeploy.size() > 0) {
+					float demandedCPU = 0.0f;
+					float runningTime = 0.0f;
+					float deadline = 0.0f;
+					float pendingVNFs = 0.0f;
+					String currentVNFName = "";
+					String serviceName = "";
+					int cluster = 1;
+					int node = 0;
+
+					if (ODLBrain.vnfRequestedtoDeploy.isEmpty() == false) { // Getting VNF request
+						currentVNFName = ODLBrain.getCurrentVNF();
+						serviceName = ODLBrain.getServiceName();
+						List<String> vnf = ODLBrain.vnfRequestedtoDeploy.get(currentVNFName);
+						demandedCPU = Float.parseFloat(vnf.get(0)); // CPU demand of analyzed VNF
+						runningTime = Float.parseFloat(vnf.get(1)); // Running time of analyzed VNF
+						deadline = Float.parseFloat(vnf.get(2)); // Deadline of analyzed VNF
+						pendingVNFs = Float.parseFloat(vnf.get(3));  // Pending functions of service request
+						ODLBrain.vnfRequestedtoDeploy.remove(currentVNFName);
+					}
+					System.out.println("Pending VNFs: " + Integer.toString(ODLBrain.vnfRequestedtoDeploy.size()));
+					System.out.println("\n");
+
+					// Execute a least loaded criterion to select the node 
+					if (algo.equals("Least_loaded")) {
+
+						List<Float> cpu = new ArrayList<Float>();
+
+						NavigableSet<String> keysCPU = ODLBrain.nodesCPUPerMaster.keySet();
+						Iterator<String> iteratorCPU = keysCPU.iterator();
+
+						while (iteratorCPU.hasNext()) {
+							String next = iteratorCPU.next();
+							Set<String> keynode = ODLBrain.nodesCPUPerMaster.get(next).keySet();
+							Iterator<String> keynode_iter = keynode.iterator();
+							while(keynode_iter.hasNext()) {
+								String nameNode = keynode_iter.next();
+								if (nameNode.equals("kubernetes-control-plane")) {
+									cpu.add(ODLBrain.MAX_CPU_NODES);
+								} else {
+									cpu.add(ODLBrain.nodesCPUPerMaster.get(next).get(nameNode));
+								}
+							}
+						}
+
+						System.out.println(cpu);
+						System.out.println("\n");
+
+						float minCPU = Collections.min(cpu);
+						int indexCPU = cpu.indexOf(minCPU);
+
+						int indexes = clusters * nodes;
+						int j = 0;
+						for (int i = 0; i < indexes; ++i) {
+							if (j > nodes - 1) {
+								cluster++;
+								j = 0;
+							}
+							if (indexCPU == i) {
+								node = j;
+								break;
+							}
+							j++;
+						}
+					}
+
+					// Execute a sequential criterion to select the node. Consume all the node's resources before selecting a new one.
+					if (algo.equals("Sequential")) {
+
+						if (lastVNFRejected) {
+							List<Float> cpu = new ArrayList<Float>();
+
+							NavigableSet<String> keysCPU = ODLBrain.nodesCPUPerMaster.keySet();
+							Iterator<String> iteratorCPU = keysCPU.iterator();
+
+							while (iteratorCPU.hasNext()) {
+								String next = iteratorCPU.next();
+								Set<String> keynode = ODLBrain.nodesCPUPerMaster.get(next).keySet();
+								Iterator<String> keynode_iter = keynode.iterator();
+								while(keynode_iter.hasNext()) {
+									String nameNode = keynode_iter.next();
+									if (nameNode.equals("kubernetes-control-plane")) {
+										cpu.add(ODLBrain.MAX_CPU_NODES);
+									} else {
+										cpu.add(ODLBrain.nodesCPUPerMaster.get(next).get(nameNode));
+									}
+								}
+							}
+
+							System.out.println(cpu);
+							System.out.println("\n");
+
+							float minCPU = Collections.min(cpu);
+							int indexCPU = cpu.indexOf(minCPU);
+
+							int indexes = clusters * nodes;
+							int j = 0;
+							for (int i = 0; i < indexes; ++i) {
+								if (j > nodes - 1) {
+									cluster++;
+									j = 0;
+								}
+								if (indexCPU == i) {
+									node = j;
+									break;
+								}
+								j++;
+							}
+
+							lastCluster = cluster;
+							lastNode = node;
+
+						} else {
+							cluster = lastCluster;
+							node = lastNode;
+						}
+					}
+
+					// Execute a global SOCCS criterion by calculating the node's score based on the CPU and SOC usages.
+					if (algo.equals("GSOCCS")) {
+						Map<String,Float> nodesScore = new HashMap<String,Float>();
+						NavigableSet<String> keysCPU = ODLBrain.nodesCPUPerMaster.keySet();
+						Iterator<String> iteratorCPU = keysCPU.iterator();
+
+						while (iteratorCPU.hasNext()) {
+							String next = iteratorCPU.next();
+							Set<String> keysNode = ODLBrain.nodesCPUPerMaster.get(next).keySet();
+							Iterator<String> node_iter = keysNode.iterator();
+							while(node_iter.hasNext()) {
+								String nodeName = node_iter.next();
+								float cpu = ODLBrain.nodesCPUPerMaster.get(next).get(nodeName);
+								float soc = ODLBrain.nodesSOCPerMaster.get(next).get(nodeName);
+								float score = (0.5f * (soc / ODLBrain.MAX_SOC_NODES)) + (0.5f * (1f - (cpu / ODLBrain.MAX_CPU_NODES)));
+								String master = next.substring(next.lastIndexOf("e") + 1);
+								nodesScore.put(nodeName.concat(master), score);
+							}
+						}
+
+						System.out.println(nodesScore);
+						System.out.println("\n");
+
+						Set<String> keysScore = nodesScore.keySet();
+						Iterator<String> iteratorScore = keysScore.iterator();
+						String bestNode = keysScore.iterator().next();
+
+						while (iteratorScore.hasNext()) {
+							String next_node = iteratorScore.next();
+							float bestScore = nodesScore.get(bestNode);
+							if (!next_node.contains("kubernetes-control-plane")) {
+								float nextScore = nodesScore.get(next_node);
+								if (nextScore > bestScore) {
+									bestNode = next_node;
+								}
+							}
+						}
+
+						cluster = Integer.parseInt(bestNode.substring(bestNode.length() - 1));
+
+						if (bestNode.contains("kubernetes-control-plane")) {
+							node = 0;
+						} else {
+							node = Integer.parseInt(bestNode.substring(bestNode.length() - 2, bestNode.length() - 1));
+						}
+					}
+
+					if (currentVNFName.length() > 1) {
+						System.out.println("------------Placement decision------------");
+						System.out.println("VNF: " + currentVNFName.substring(currentVNFName.indexOf("vnf-")));
+						System.out.println("Cluster: " + Integer.toString(cluster));
+						System.out.println("Node: " + Integer.toString(node));
+		
+						if (runningTime > 0) {
+							ODLBrain.notifyVNFDeployment(cluster, node, currentVNFName, demandedCPU, "Job", serviceName);
+						} else {
+							ODLBrain.notifyVNFDeployment(cluster, node, currentVNFName, demandedCPU, "Deployment", serviceName);
+						}
+		
+						int count = 0;
+						while (currentVNFName.length() > 1) {
+							//System.out.println("------Waiting VNF deployment------");
+							if (ODLBrain.currentVNFDeployed() || ODLBrain.currentVNFRejected() || count == 60) {
+								if (count == 60) { //Assume current VNF has failed
+									ODLBrain.setFailedVNFs();
+		
+									int vnfServScheduled = 0;
+									Set<String> keysVNfs = ODLBrain.serviceRequestedtoDeploy.get(serviceName).keySet();
+									Iterator<String> iteratorKeys = keysVNfs.iterator();
+									while(iteratorKeys.hasNext()) {
+										String key = iteratorKeys.next();
+										List<String> infoVNf = ODLBrain.serviceRequestedtoDeploy.get(serviceName).get(key);
+										if (infoVNf.get(5).equals("deployed")) {
+											vnfServScheduled++;
+										}
+										String keyConcat = infoVNf.get(2).concat(key);
+										if (ODLBrain.vnfRequestedtoDeploy.containsKey(keyConcat)) {
+											ODLBrain.vnfRequestedtoDeploy.remove(keyConcat);
+		
+											ODLBrain.setDiscardedVNFs();
+											System.out.println("Removing key: " + keyConcat + " from vnfRequestedtoDeploy");
+										}
+									}
+									
+									if (!ODLBrain.servicesState.containsKey(serviceName)) {
+										ODLBrain.servicesState.put(serviceName, "Rejected");
+										int delta = keysVNfs.size() - vnfServScheduled;
+										ODLBrain.setRejectedVNFs(delta);
+										ODLBrain.setRejectedService();
+									}
+		
+									ODLBrain.updateResults();
+								}
+								count = 0;
+								break;
+							}
+
+							try {
+								Thread.sleep(1000);
+								count++;
+							} catch  (InterruptedException e){
+								e.printStackTrace();
+							}   
+						}
+		
+						if (ODLBrain.currentVNFDeployed()) {
+							float cpuDeployedNode = 0f;
+							if (node == 0) {
+								cpuDeployedNode = ODLBrain.nodesCPUPerMaster.get("kubernetes-control-plane" + Integer.toString(cluster)).get("kubernetes-control-plane");
+							} else {
+								cpuDeployedNode = ODLBrain.nodesCPUPerMaster.get("kubernetes-control-plane" + Integer.toString(cluster)).get("kubernetes-worker" + Integer.toString(node));
+							}
+							float newCpuDeployedNode = cpuDeployedNode + demandedCPU;
+							if (node == 0) {
+								ODLBrain.nodesCPUPerMaster.get("kubernetes-control-plane" + Integer.toString(cluster)).put("kubernetes-control-plane", newCpuDeployedNode);
+							} else {
+								ODLBrain.nodesCPUPerMaster.get("kubernetes-control-plane" + Integer.toString(cluster)).put("kubernetes-worker" + Integer.toString(node), newCpuDeployedNode);
+							}
+							lastVNFRejected = false;
+						}
+			
+						if (ODLBrain.currentVNFRejected()) {
+							lastVNFRejected = true;
+						}
+						
+						ODLBrain.isCurrentVNFDeployed.set(false);
+						ODLBrain.isCurrentVNFRejected.set(false);
+					}
+
+					LocalDateTime timestamp = LocalDateTime.now();
+					float lifetime = ODLBrain.getTotalLifeTime();
+					float resourceCostTerm = ODLBrain.getTotalCostUsedResources();
+					ODLBrain.setDeployedEvent();
+					float deployedEvent = ODLBrain.getDeployedEventTerm();
+
+					String[] env_result = {timestamp.toString(),
+										Integer.toString(envStep),
+										Float.toString(0.0f),
+										Float.toString(0.0f),
+										Float.toString(resourceCostTerm),
+										Float.toString(lifetime),
+										Float.toString(deployedEvent),
+										Double.toString(0.0d)};
+
+					try {
+						writerEnv.writeNext(env_result);
+						writerEnv.flush();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+
+					envStep++;
+
+					if (ODLBrain.vnfRequestedtoDeploy.size() == 0) {
+						long finishingTime = System.nanoTime();
+						long processingTime = finishingTime - startingTime;
+						System.out.println("****Processing Time******" + Long.toString(processingTime));
+					}
+				}
+			} catch (InterruptedException e) {
+                logger.error("", e);
+            }
+		}
 	}
 
     public static String IPfromLocatorMetatraffic(LocatorSeq locatorseq) {
