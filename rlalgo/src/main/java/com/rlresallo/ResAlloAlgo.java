@@ -12,13 +12,8 @@ import ai.djl.ndarray.NDList;
 import ai.djl.ndarray.NDManager;
 import ai.djl.util.RandomUtils;
 
-//import org.sdnhub.odl.tutorial.learningswitch.impl.TutorialL2Forwarding;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-//import java.awt.*;
-//import java.awt.event.WindowAdapter;
-//import java.awt.event.WindowEvent;
-//import java.awt.image.BufferedImage;
 import java.util.*;
 import com.opencsv.CSVWriter;
 
@@ -39,16 +34,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-//import java.util.NavigableSet;
 
 import java.time.LocalDateTime;
 
 import static com.rlresallo.TrainResAlloAlgo.OBSERVE;
-//import static com.rlresallo.TrainResAlloAlgo.NUMBER_CLUSTER;
-//import static com.rlresallo.TrainResAlloAlgo.NUMBER_NODES;
 
 public class ResAlloAlgo implements Environment {
-    //private static final long serialVersionUID = 1L;
+
     private static final Logger logger = LoggerFactory.getLogger(ResAlloAlgo.class);
     
     private static int envState;
@@ -84,7 +76,6 @@ public class ResAlloAlgo implements Environment {
     public static final int[] NODE10_3 = {0,0,0,0,0,0,0,0,0,0,1,0,0};
     public static final int[] NODE11_3 = {0,0,0,0,0,0,0,0,0,0,0,1,0};
     public static final int[] NODE12_3 = {0,0,0,0,0,0,0,0,0,0,0,0,1};
-    //private boolean withGraphics;
 
     private final NDManager manager;
     private final ReplayBuffer replayBuffer;
@@ -117,7 +108,7 @@ public class ResAlloAlgo implements Environment {
      */
     public ResAlloAlgo(NDManager manager, int batchSize, int replayBufferSize, int noClusters, int noNodes) {
         this(manager, new LruReplayBuffer(batchSize, replayBufferSize));
-        //this.withGraphics = withGraphics;
+
         clusters = noClusters;
         nodes = noNodes;
         
@@ -188,26 +179,6 @@ public class ResAlloAlgo implements Environment {
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-        /**
-        for(int k = 1; k <= noClusters; k++) {
-            for(int n = 1; n <= noNodes; n++) {
-                NODE[0] = k;
-                NODE[1] = n;
-                actionSpace.add(new NDList(manager.create(NODE))); // Action to place VNF in node n of cluster k
-            }
-        }
-        */
-
-        //status = ODLBrain.getEdgeNodesStatus(noClusters, noNodes);
-        //System.out.println(status);
-        //currentVNFName = ODLBrain.getCurrentVNF();
-        //System.out.println(currentVNFName);
-        //vnfRequest = ODLBrain.getVNFRequest();
-        //System.out.println(vnfRequest);
-        //currentObservation = createObservation(status, vnfRequest);
-        //System.out.println("------------Initial observation------------");
-        //System.out.println(Arrays.toString(currentObservation.toArray()));
         
         setEnvState(ENV_START);
     }
@@ -247,11 +218,9 @@ public class ResAlloAlgo implements Environment {
         // run the environment
 
         status = ODLBrain.getEdgeNodesStatus(clusters, nodes);
-        //System.out.println(status);
         currentVNFName = ODLBrain.getCurrentVNF();
         serviceName = ODLBrain.getServiceName();
         vnfRequest = ODLBrain.getVNFRequest();
-        //System.out.println(vnfRequest);
         currentObservation = createObservation(status, vnfRequest);
         mask = ODLBrain.getNodesMask(clusters, nodes);
         ResAlloAlgo.setExtCurrentObservation(currentObservation);
@@ -360,8 +329,7 @@ public class ResAlloAlgo implements Environment {
                 }
                 j++;
             }
-            //int cluster = action.singletonOrThrow().getInt(0);
-            //int node = action.singletonOrThrow().getInt(1);
+
             if (currentVNFName.length() > 1) {
                 System.out.println("------------Placement decision------------");
                 System.out.println("VNF: " + currentVNFName.substring(currentVNFName.indexOf("vnf-")));
@@ -410,31 +378,7 @@ public class ResAlloAlgo implements Environment {
                             }
 
                             ODLBrain.updateResults();
-                            //int failedVNFs = ODLBrain.getFailedVNFs();
-                            //ODLBrain.multiFailedVNFs.set(failedVNFs + 1);
-                            //ODLBrain.multiFailedVNFs.getAndIncrement();
-                            //int vnfServScheduled = 0;
-                            //Set<String> keysVNfs = ODLBrain.serviceRequestedtoDeploy.get(serviceName).keySet();
-                            //Iterator<String> iteratorKeys = keysVNfs.iterator();
-                            //while(iteratorKeys.hasNext()) {
-                            //    String key = iteratorKeys.next();
-                            //    List<String> infoVNf = ODLBrain.serviceRequestedtoDeploy.get(serviceName).get(key);
-                            //    if (infoVNf.get(5).equals("deployed")) {
-                            //        vnfServScheduled++;
-                            //    }
-                            //    String keyConcat = infoVNf.get(2).concat(key);
-                            //    if (ODLBrain.vnfRequestedtoDeploy.containsKey(keyConcat)) {
-                            //        ODLBrain.vnfRequestedtoDeploy.remove(keyConcat);
-                            //    }
-                            //}
-                            //int rejectedServices = ODLBrain.getRejectedServices();
-                            //ODLBrain.multiRejectedService.set(rejectedServices + 1);
-                            //ODLBrain.multiRejectedService.getAndIncrement();
-                            //int delta = keysVNfs.size() - vnfServScheduled;
-                            //int rejectedVNFs = ODLBrain.getRejectedVNFs();
-                            //ODLBrain.multiRejectedVNFs.set(rejectedVNFs + delta);
-                            //ODLBrain.multiRejectedVNFs.getAndAdd(delta);
-                            //ResAlloAlgo.setCurrentReward(0f);
+
                         }
                         count = 0;
                         break;
@@ -482,11 +426,6 @@ public class ResAlloAlgo implements Environment {
         NDList preObservation = currentObservation;
 
         status = ODLBrain.getEdgeNodesStatus(clusters, nodes);
-        //System.out.println(status);
-        //currentVNFName = ODLBrain.getCurrentVNF();
-        //System.out.println(currentVNFName);
-        //vnfRequest = ODLBrain.getVNFRequest();
-        //System.out.println(vnfRequest);
         currentObservation = createObservation(status, vnfRequest);
         System.out.println("------------Current observation after step environment------------");
         System.out.println(Arrays.toString(currentObservation.toArray()));
