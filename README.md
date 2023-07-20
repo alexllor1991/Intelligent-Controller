@@ -1,7 +1,16 @@
 # Intelligent-Controller
-This repository implements the intelligent controller logic. It implements a DDS mechanism to exchange network information with other entities. Additionally, it implements a DQN algorithm to deploy VNFs in multi-cluster domains.
+This project implements the intelligent controller logic. It implements a DDS mechanism to exchange network information with other entities. Additionally, it implements a DQN algorithm to deploy VNFs in multi-cluster domains.
 
 The implemented package of a DQN algorithm uses Deep Java Library. It also incorporates the DDS implementation in case of using it without an SDN controller. Thus, it can communicate with other elements through the DDS.<br/>  [rlalgo/src/main/java/com/rlresallo/](rlalgo/src/main/java/com/rlresallo/)
+
+The results of this project have been published in the paper entitled **"DQN-based Intelligent Controller for Multiple Edge Domains"** which has been accepted for publication in the Journal of Network and Computer Applications:
+
+Article link: 
+
+If you use this solution in your work, please cite it as [1] (see CITATION.cff).
+
+## Reference
+[1] Llorens-Carrodeguas, A.; Cervelló-Pastor, C.; Valera, F. "DQN-based Intelligent Controller for Multiple Edge Domains," *JNCA* 2023, vol. XX, XX. https://doi.org/XX
 
 In case of running the **rlalgo package** independent of an SDN controller are necessary some steps:
 - Compile the package using the following command: 
