@@ -5,12 +5,13 @@ The implemented package of a DQN algorithm uses Deep Java Library. It also incor
 
 The results of this project have been published in the paper entitled **"DQN-based Intelligent Controller for Multiple Edge Domains"** which has been accepted for publication in the Journal of Network and Computer Applications:
 
-Article link: 
+Article link: [https://www.sciencedirect.com/science/article/pii/S1084804523001248](https://www.sciencedirect.com/science/article/pii/S1084804523001248)
 
 If you use this solution in your work, please cite it as [1] (see CITATION.cff).
 
 ## Reference
-[1] Llorens-Carrodeguas, A.; Cervelló-Pastor, C.; Valera, F. "DQN-based Intelligent Controller for Multiple Edge Domains," *JNCA* 2023, vol. XX, XX. https://doi.org/XX
+[1] Llorens-Carrodeguas, A.; Cervelló-Pastor, C.; Valera, F. "DQN-based Intelligent Controller for Multiple Edge Domains," *Journal of Network and Computer Applications*
+(2023), [https://doi.org/10.1016/j.jnca.2023.103705](https://doi.org/10.1016/j.jnca.2023.103705)
 
 In case of running the **rlalgo package** independent of an SDN controller are necessary some steps:
 - Compile the package using the following command: 
