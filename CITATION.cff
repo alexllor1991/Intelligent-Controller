@@ -13,8 +13,6 @@ preferred-citation:
     given-names: "Francisco"
     orcid: "https://orcid.org/0000-0001-5056-0573"
   title: "DQN-based Intelligent Controller for Multiple Edge Domains"
-  doi: "https://doi.org/XX"
-  journal: "JNCA"
-  issue: XX
-  volume: XX
+  doi: "https://doi.org/10.1016/j.jnca.2023.103705"
+  journal: "Journal of Network and Computer Applications"
   year: 2023
