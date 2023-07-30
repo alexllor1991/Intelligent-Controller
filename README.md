@@ -11,7 +11,7 @@ If you use this solution in your work, please cite it as [1] (see CITATION.cff).
 
 ## Reference
 [1] Llorens-Carrodeguas, A.; Cervelló-Pastor, C.; Valera, F. "DQN-based Intelligent Controller for Multiple Edge Domains," *Journal of Network and Computer Applications*
-(2023), [https://doi.org/10.1016/j.jnca.2023.103705](https://doi.org/10.1016/j.jnca.2023.103705)
+(2023), [https://doi.org/10.1016/j.jnca.2023.103705](https://doi.org/10.1016/j.jnca.2023.103705) 
 
 In case of running the **rlalgo package** independent of an SDN controller are necessary some steps:
 - Compile the package using the following command: 
