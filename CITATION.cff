@@ -15,4 +15,5 @@ preferred-citation:
   title: "DQN-based Intelligent Controller for Multiple Edge Domains"
   doi: "https://doi.org/10.1016/j.jnca.2023.103705"
   journal: "Journal of Network and Computer Applications"
+  volume: 218
   year: 2023
